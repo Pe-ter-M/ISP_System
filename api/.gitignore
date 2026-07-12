@@ -1,0 +1,44 @@
+# Build results
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.sln.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Environment variables
+.env
+.env.local
+
+# IDE specific files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Application settings (environment-specific)
+appsettings.*.json
+appsettings.Development.json
+
+# NuGet
+.nuget/
+*.nupkg
+*.snupkg
+
+# Local NuGet repository
+NuGetPackages/
+
+# Miscellaneous
+*.log
+*.tmp
