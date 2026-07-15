@@ -1,6 +1,4 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
+using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Users.Core;
 
@@ -10,10 +8,19 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/users").WithTags("Users");
 
-        group.MapGet("/", () => "Users endpoint - List");
-        group.MapGet("/{id:int}", (int id) => $"Users endpoint - Get {id}");
-        group.MapPost("/", () => "Users endpoint - Create");
-        group.MapPut("/{id:int}", (int id) => $"Users endpoint - Update {id}");
-        group.MapDelete("/{id:int}", (int id) => $"Users endpoint - Delete {id}");
+        group.MapGet("/", () => "Users endpoint - List")
+            .RequirePermission(Permissions.UsersView);
+
+        group.MapGet("/{id:int}", (int id) => $"Users endpoint - Get {id}")
+            .RequirePermission(Permissions.UsersView);
+
+        group.MapPost("/", () => "Users endpoint - Create")
+            .RequirePermission(Permissions.UsersCreate);
+
+        group.MapPut("/{id:int}", (int id) => $"Users endpoint - Update {id}")
+            .RequirePermission(Permissions.UsersUpdate);
+
+        group.MapDelete("/{id:int}", (int id) => $"Users endpoint - Delete {id}")
+            .RequirePermission(Permissions.UsersDelete);
     }
 }
