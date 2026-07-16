@@ -1,7 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using InternetProvider.Api.Modules.Infrastructure;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 using InternetProvider.Api.Modules.Auth.Core;
+using InternetProvider.Api.Modules.Auth.Interfaces;
+using InternetProvider.Api.Modules.Users.Interfaces;
+using InternetProvider.Api.Modules.Users.Core;
 using InternetProvider.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,7 +20,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ── Auth services ────────────────────────────────────────────
 builder.Services.AddSingleton<JwtService>();
-builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+
+// ── User services ────────────────────────────────────────────
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 builder.Services.AddOpenApi();
 
@@ -35,11 +44,12 @@ if (app.Environment.IsDevelopment())
 // ── JWT middleware (extracts user from token) ─────────────────
 app.UseJwtAuth();
 
-// ── Auto-apply migrations ─────────────────────────────────────
+// ── Auto-apply migrations + seed ─────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+    await DatabaseSeeder.SeedAsync(db);
 }
 
 // ── Endpoints ─────────────────────────────────────────────────

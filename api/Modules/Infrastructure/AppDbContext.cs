@@ -9,10 +9,10 @@ public class AppDbContext : DbContext
     // Business tables
     public DbSet<Organization.Core.Models.Organization> Organizations => Set<Organization.Core.Models.Organization>();
     public DbSet<Users.Core.Models.User> Users => Set<Users.Core.Models.User>();
-    public DbSet<Users.Core.Models.Role> Roles => Set<Users.Core.Models.Role>();
-    public DbSet<Users.Core.Models.Permission> Permissions => Set<Users.Core.Models.Permission>();
-    public DbSet<Users.Core.Models.RolePermission> RolePermissions => Set<Users.Core.Models.RolePermission>();
-    public DbSet<Users.Core.Models.UserPermission> UserPermissions => Set<Users.Core.Models.UserPermission>();
+    public DbSet<Roles.Core.Models.Role> Roles => Set<Roles.Core.Models.Role>();
+    public DbSet<Roles.Core.Models.Permission> Permissions => Set<Roles.Core.Models.Permission>();
+    public DbSet<Roles.Core.Models.RolePermission> RolePermissions => Set<Roles.Core.Models.RolePermission>();
+    public DbSet<Roles.Core.Models.UserPermission> UserPermissions => Set<Roles.Core.Models.UserPermission>();
     public DbSet<Customers.Core.Models.Customer> Customers => Set<Customers.Core.Models.Customer>();
     public DbSet<Plans.Core.Models.RadiusGroup> RadiusGroups => Set<Plans.Core.Models.RadiusGroup>();
     public DbSet<Plans.Core.Models.RadiusPackage> RadiusPackages => Set<Plans.Core.Models.RadiusPackage>();
@@ -46,22 +46,22 @@ public class AppDbContext : DbContext
             .HasIndex(u => u.RoleId);
 
         // ── Roles ──
-        modelBuilder.Entity<Users.Core.Models.Role>()
+        modelBuilder.Entity<Roles.Core.Models.Role>()
             .HasIndex(r => r.Name)
             .IsUnique();
 
         // ── RolePermissions (composite key) ──
-        modelBuilder.Entity<Users.Core.Models.RolePermission>()
+        modelBuilder.Entity<Roles.Core.Models.RolePermission>()
             .HasKey(rp => new { rp.RoleId, rp.PermissionId });
 
         // ── UserPermissions (composite key + index) ──
-        modelBuilder.Entity<Users.Core.Models.UserPermission>()
+        modelBuilder.Entity<Roles.Core.Models.UserPermission>()
             .HasKey(up => new { up.UserId, up.PermissionId });
-        modelBuilder.Entity<Users.Core.Models.UserPermission>()
+        modelBuilder.Entity<Roles.Core.Models.UserPermission>()
             .HasIndex(up => up.UserId);
 
         // ── Permissions ──
-        modelBuilder.Entity<Users.Core.Models.Permission>()
+        modelBuilder.Entity<Roles.Core.Models.Permission>()
             .HasIndex(p => p.Code)
             .IsUnique();
 

@@ -38,7 +38,7 @@ public static class PermissionAuthorization
             var permissions = principal.FindAll("permission").Select(c => c.Value);
 
             if (!permissions.Contains(permission))
-                return Results.Forbid();
+                return Results.Json(new { error = "Forbidden: missing required permission" }, statusCode: 403);
 
             return await next(context);
         });

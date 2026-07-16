@@ -1,4 +1,9 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using InternetProvider.Api.Services;
+using InternetProvider.Api.Modules.Users.Interfaces;
+using InternetProvider.Api.Modules.Users.Dtos;
 
 namespace InternetProvider.Api.Modules.Users.Core;
 
@@ -8,19 +13,33 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/users").WithTags("Users");
 
-        group.MapGet("/", () => "Users endpoint - List")
-            .RequirePermission(Permissions.UsersView);
+        group.MapGet("/", async (IUserService service) =>
+        {
+            var users = await service.GetAllAsync();
+            return Results.Ok(users);
+        });
+       
 
-        group.MapGet("/{id:int}", (int id) => $"Users endpoint - Get {id}")
-            .RequirePermission(Permissions.UsersView);
+        group.MapGet("/{id:int}", async (int id, IUserService service) =>
+        {
+            var user = await service.GetByIdAsync(id);
+            return user == null ? Results.NotFound() : Results.Ok(user);
+        })
+        .RequirePermission(Permissions.UsersView);
 
-        group.MapPost("/", () => "Users endpoint - Create")
-            .RequirePermission(Permissions.UsersCreate);
+        group.MapPost("/", async (CreateUserRequest req, IUserService service) =>
+        {
+            try
+            {
+                var user = await service.CreateAsync(req);
+                return Results.Created($"/api/users/{user.Id}", user);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Conflict(new { error = ex.Message });
+            }
+        })
+        .RequirePermission(Permissions.UsersCreate);
 
-        group.MapPut("/{id:int}", (int id) => $"Users endpoint - Update {id}")
-            .RequirePermission(Permissions.UsersUpdate);
-
-        group.MapDelete("/{id:int}", (int id) => $"Users endpoint - Delete {id}")
-            .RequirePermission(Permissions.UsersDelete);
     }
 }

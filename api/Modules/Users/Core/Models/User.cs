@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using InternetProvider.Api.Modules.Roles.Core.Models;
 
 namespace InternetProvider.Api.Modules.Users.Core.Models;
 

@@ -8,6 +8,7 @@ using InternetProvider.Api.Modules.Radius.Core;
 using InternetProvider.Api.Modules.Nas.Core;
 using InternetProvider.Api.Modules.RadAcct.Core;
 using InternetProvider.Api.Modules.RadPostAuth.Core;
+using InternetProvider.Api.Modules.Roles.Core;
 using InternetProvider.Api.Modules.Auth.Core;
 
 namespace InternetProvider.Api.Modules.Infrastructure.Core;
@@ -20,6 +21,7 @@ public static class ServiceRegistration
         OrganizationEndpoints.Map(app);
         SettingsEndpoints.Map(app);
         UserEndpoints.Map(app);
+        RoleEndpoints.Map(app);
         CustomerEndpoints.Map(app);
         PlanEndpoints.Map(app);
         SubscriptionEndpoints.Map(app);

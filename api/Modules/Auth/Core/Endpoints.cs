@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using InternetProvider.Api.Modules.Auth.Dtos;
+using InternetProvider.Api.Modules.Auth.Interfaces;
 using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Auth.Core;
@@ -12,7 +13,7 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth");
 
-        group.MapPost("/login", async (LoginRequest req, AuthService auth) =>
+        group.MapPost("/login", async (LoginRequest req, IAuthService auth) =>
         {
             var result = await auth.LoginAsync(req);
             if (result == null)
@@ -34,6 +35,6 @@ public static class AuthEndpoints
                 Role = user.FindFirstValue("role_name"),
                 Permissions = user.FindAll("permission").Select(c => c.Value).ToList()
             });
-        }).RequirePermission(Permissions.UsersView);
+        }); // No permission required — any authenticated user can see their own profile
     }
 }
