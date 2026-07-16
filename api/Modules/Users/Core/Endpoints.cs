@@ -13,33 +13,47 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/users").WithTags("Users");
 
-        group.MapGet("/", async (IUserService service) =>
+        group.MapGet("/", async (IUserService service, ILogger<LoggerMarker> log) =>
         {
+            log.LogInformation("GET /api/users called");
             var users = await service.GetAllAsync();
-            return Results.Ok(users);
-        });
-       
-
-        group.MapGet("/{id:int}", async (int id, IUserService service) =>
-        {
-            var user = await service.GetByIdAsync(id);
-            return user == null ? Results.NotFound() : Results.Ok(user);
+            log.LogInformation("GET /api/users returning {Count} records with 200", users.Count);
+            return ApiResponse.Success(users, $"Found {users.Count} users").ToResult();
         })
         .RequirePermission(Permissions.UsersView);
 
-        group.MapPost("/", async (CreateUserRequest req, IUserService service) =>
+        group.MapGet("/{id:int}", async (int id, IUserService service, ILogger<LoggerMarker> log) =>
         {
+            log.LogInformation("GET /api/users/{UserId} called", id);
+            var user = await service.GetByIdAsync(id);
+
+            if (user == null)
+            {
+                log.LogWarning("GET /api/users/{UserId} — not found", id);
+                return ApiResponse.Error("User not found", 404).ToResult();
+            }
+
+            log.LogInformation("GET /api/users/{UserId} — found {Email}", id, user.Email);
+            return ApiResponse.Success(user, "User found").ToResult();
+        })
+        .RequirePermission(Permissions.UsersView);
+
+        group.MapPost("/", async (CreateUserRequest req, IUserService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("POST /api/users — creating user {Email}", req.Email);
+
             try
             {
                 var user = await service.CreateAsync(req);
-                return Results.Created($"/api/users/{user.Id}", user);
+                log.LogInformation("POST /api/users — created {Email} with ID {UserId}", user.Email, user.Id);
+                return ApiResponse.Created(user, "User created successfully").ToResult();
             }
             catch (InvalidOperationException ex)
             {
-                return Results.Conflict(new { error = ex.Message });
+                log.LogWarning("POST /api/users — conflict: {Message}", ex.Message);
+                return ApiResponse.Error(ex.Message, 409).ToResult();
             }
         })
         .RequirePermission(Permissions.UsersCreate);
-
     }
 }

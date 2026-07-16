@@ -7,28 +7,48 @@ namespace InternetProvider.Api.Modules.Users.Core;
 public class UserService : IUserService
 {
     private readonly IUserRepository _repo;
+    private readonly ILogger<UserService> _log;
 
-    public UserService(IUserRepository repo)
+    public UserService(IUserRepository repo, ILogger<UserService> log)
     {
         _repo = repo;
+        _log = log;
     }
 
     public async Task<List<UserResponse>> GetAllAsync()
     {
+        _log.LogDebug("Processing get all users request");
         var users = await _repo.GetAllAsync();
-        return users.Select(MapToResponse).ToList();
+        var responses = users.Select(MapToResponse).ToList();
+        _log.LogDebug("Returning {Count} user records", responses.Count);
+        return responses;
     }
 
     public async Task<UserResponse?> GetByIdAsync(int id)
     {
+        _log.LogDebug("Processing get user by ID {UserId}", id);
         var user = await _repo.GetByIdAsync(id);
-        return user == null ? null : MapToResponse(user);
+
+        if (user == null)
+        {
+            _log.LogWarning("User {UserId} not found — returning null", id);
+            return null;
+        }
+
+        _log.LogInformation("Returning user {UserId}: {Email}", id, user.Email);
+        return MapToResponse(user);
     }
 
     public async Task<UserResponse> CreateAsync(CreateUserRequest request)
     {
+        _log.LogInformation("Processing create user request for email {Email} with role {RoleId}",
+            request.Email, request.RoleId);
+
         if (await _repo.EmailExistsAsync(request.Email))
+        {
+            _log.LogWarning("Duplicate email attempt: {Email}", request.Email);
             throw new InvalidOperationException($"Email '{request.Email}' is already in use.");
+        }
 
         var user = new User
         {
@@ -43,6 +63,7 @@ public class UserService : IUserService
         };
 
         var created = await _repo.CreateAsync(user);
+        _log.LogInformation("User created successfully: {UserId} — {Email}", created.Id, created.Email);
         return MapToResponse(created);
     }
 

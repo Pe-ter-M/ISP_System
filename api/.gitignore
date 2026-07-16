@@ -42,3 +42,7 @@ NuGetPackages/
 # Miscellaneous
 *.log
 *.tmp
+
+
+# Logs
+logs/

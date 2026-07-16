@@ -1,5 +1,0 @@
-### Health Check
-GET http://localhost:5000/api/health
-
-### Hello World
-GET http://localhost:5000/

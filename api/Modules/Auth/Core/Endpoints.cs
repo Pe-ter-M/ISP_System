@@ -13,28 +13,37 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth");
 
-        group.MapPost("/login", async (LoginRequest req, IAuthService auth) =>
+        group.MapPost("/login", async (LoginRequest req, IAuthService auth, ILogger<LoggerMarker> log) =>
         {
+            log.LogInformation("Login attempt for {Email}", req.Email);
             var result = await auth.LoginAsync(req);
+
             if (result == null)
-                return Results.Unauthorized();
-            return Results.Ok(result);
+            {
+                log.LogWarning("Login failed for {Email}", req.Email);
+                return ApiResponse.Error("Invalid email or password", 401).ToResult();
+            }
+
+            log.LogInformation("Login successful for {Email} ({FullName})", req.Email, result.FullName);
+            return ApiResponse.Success(result, "Login successful").ToResult();
         });
 
         group.MapGet("/me", (HttpContext http) =>
         {
             var user = http.Items["User"] as ClaimsPrincipal;
             if (user == null)
-                return Results.Unauthorized();
+                return ApiResponse.Error("Not authenticated", 401).ToResult();
 
-            return Results.Ok(new
+            var profile = new
             {
                 UserId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
                 Email = user.FindFirstValue(ClaimTypes.Email),
                 FullName = user.FindFirstValue(ClaimTypes.Name),
                 Role = user.FindFirstValue("role_name"),
                 Permissions = user.FindAll("permission").Select(c => c.Value).ToList()
-            });
-        }); // No permission required — any authenticated user can see their own profile
+            };
+
+            return ApiResponse.Success(profile, "Authenticated").ToResult();
+        });
     }
 }

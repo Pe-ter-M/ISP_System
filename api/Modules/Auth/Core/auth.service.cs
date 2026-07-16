@@ -19,7 +19,7 @@ public class AuthService : IAuthService
     {
         var user = await _repo.FindActiveUserByEmailAsync(request.Email);
         if (user == null)
-            return null;
+            return null; 
 
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
