@@ -1,6 +1,7 @@
 using InternetProvider.Api.Modules.Users.Dtos;
 using InternetProvider.Api.Modules.Users.Interfaces;
 using InternetProvider.Api.Modules.Users.Core.Models;
+using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Users.Core;
 
@@ -19,6 +20,11 @@ public class UserService : IUserService
     {
         _log.LogDebug("Processing get all users request");
         var users = await _repo.GetAllAsync();
+        if (users.Count == 0)
+        {
+            _log.LogInformation("No users found in the database");
+            throw new NotFoundException("No users found");
+        }
         var responses = users.Select(MapToResponse).ToList();
         _log.LogDebug("Returning {Count} user records", responses.Count);
         return responses;
@@ -47,7 +53,7 @@ public class UserService : IUserService
         if (await _repo.EmailExistsAsync(request.Email))
         {
             _log.LogWarning("Duplicate email attempt: {Email}", request.Email);
-            throw new InvalidOperationException($"Email '{request.Email}' is already in use.");
+            throw new ConflictException($"Email '{request.Email}' is already in use.");
         }
 
         var user = new User

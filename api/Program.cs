@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using Serilog;
 using InternetProvider.Api.Modules.Infrastructure;
@@ -41,7 +42,24 @@ try
     builder.Services.AddScoped<IUserRepository, UserRepository>();
     builder.Services.AddScoped<IUserService, UserService>();
 
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Components ??= new();
+        document.Components.SecuritySchemes = new Dictionary<string, OpenApiSecurityScheme>
+        {
+            ["Bearer"] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                Description = "Paste your JWT token here. Get it from POST /api/auth/login"
+            }
+        };
+        return Task.CompletedTask;
+    });
+});
 
     var app = builder.Build();
 
@@ -51,9 +69,13 @@ try
         app.MapScalarApiReference(options =>
         {
             options.WithTitle("Internet Provider API")
-                   .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+                   .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
+                   .WithPreferredScheme("Bearer");
         });
     }
+
+    // ── Exception middleware ─────────────────────────────────────
+    app.UseMiddleware<ExceptionMiddleware>();
 
     // ── JWT middleware ───────────────────────────────────────────
     app.UseJwtAuth();
