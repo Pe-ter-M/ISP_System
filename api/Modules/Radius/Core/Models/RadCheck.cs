@@ -10,15 +10,15 @@ public class RadCheck
     [Column("id")]
     public int Id { get; set; }
 
-    [Column("UserName")]
+    [Column("username")]
     public string UserName { get; set; } = string.Empty;
 
-    [Column("Attribute")]
+    [Column("attribute")]
     public string Attribute { get; set; } = string.Empty;
 
     [Column("op")]
     public string Op { get; set; } = "==";
 
-    [Column("Value")]
+    [Column("value")]
     public string Value { get; set; } = string.Empty;
 }

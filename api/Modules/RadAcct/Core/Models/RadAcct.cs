@@ -7,72 +7,72 @@ namespace InternetProvider.Api.Modules.RadAcct.Core.Models;
 public class RadAcct
 {
     [Key]
-    [Column("RadAcctId")]
+    [Column("radacctid")]
     public long RadAcctId { get; set; }
 
-    [Column("AcctSessionId")]
+    [Column("acctsessionid")]
     public string AcctSessionId { get; set; } = string.Empty;
 
-    [Column("AcctUniqueId")]
+    [Column("acctuniqueid")]
     public string AcctUniqueId { get; set; } = string.Empty;
 
-    [Column("UserName")]
+    [Column("username")]
     public string? UserName { get; set; }
 
-    [Column("Realm")]
+    [Column("realm")]
     public string? Realm { get; set; }
 
-    [Column("NASIPAddress")]
+    [Column("nasipaddress")]
     public string? NasIpAddress { get; set; }
 
-    [Column("NASPortId")]
+    [Column("nasportid")]
     public string? NasPortId { get; set; }
 
-    [Column("NASPortType")]
+    [Column("nasporttype")]
     public string? NasPortType { get; set; }
 
-    [Column("AcctStartTime")]
+    [Column("acctstarttime")]
     public DateTime? AcctStartTime { get; set; }
 
-    [Column("AcctUpdateTime")]
+    [Column("acctupdatetime")]
     public DateTime? AcctUpdateTime { get; set; }
 
-    [Column("AcctStopTime")]
+    [Column("acctstoptime")]
     public DateTime? AcctStopTime { get; set; }
 
-    [Column("AcctInterval")]
+    [Column("acctinterval")]
     public long? AcctInterval { get; set; }
 
-    [Column("AcctSessionTime")]
+    [Column("acctsessiontime")]
     public long? AcctSessionTime { get; set; }
 
-    [Column("AcctInputOctets")]
+    [Column("acctinputoctets")]
     public long? AcctInputOctets { get; set; }
 
-    [Column("AcctOutputOctets")]
+    [Column("acctoutputoctets")]
     public long? AcctOutputOctets { get; set; }
 
-    [Column("CalledStationId")]
+    [Column("calledstationid")]
     public string? CalledStationId { get; set; }
 
-    [Column("CallingStationId")]
+    [Column("callingstationid")]
     public string? CallingStationId { get; set; }
 
-    [Column("AcctTerminateCause")]
+    [Column("acctterminatecause")]
     public string? AcctTerminateCause { get; set; }
 
-    [Column("ServiceType")]
+    [Column("servicetype")]
     public string? ServiceType { get; set; }
 
-    [Column("FramedProtocol")]
+    [Column("framedprotocol")]
     public string? FramedProtocol { get; set; }
 
-    [Column("FramedIPAddress")]
+    [Column("framedipaddress")]
     public string? FramedIpAddress { get; set; }
 
-    [Column("FramedIPv6Address")]
+    [Column("framedipv6address")]
     public string? FramedIpv6Address { get; set; }
 
-    [Column("Class")]
+    [Column("class")]
     public string? Class { get; set; }
 }

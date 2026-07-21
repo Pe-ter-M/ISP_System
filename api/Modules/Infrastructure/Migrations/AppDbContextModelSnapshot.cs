@@ -346,99 +346,99 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<long>("RadAcctId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
-                        .HasColumnName("RadAcctId");
+                        .HasColumnName("radacctid");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("RadAcctId"));
 
                     b.Property<long?>("AcctInputOctets")
                         .HasColumnType("bigint")
-                        .HasColumnName("AcctInputOctets");
+                        .HasColumnName("acctinputoctets");
 
                     b.Property<long?>("AcctInterval")
                         .HasColumnType("bigint")
-                        .HasColumnName("AcctInterval");
+                        .HasColumnName("acctinterval");
 
                     b.Property<long?>("AcctOutputOctets")
                         .HasColumnType("bigint")
-                        .HasColumnName("AcctOutputOctets");
+                        .HasColumnName("acctoutputoctets");
 
                     b.Property<string>("AcctSessionId")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("AcctSessionId");
+                        .HasColumnName("acctsessionid");
 
                     b.Property<long?>("AcctSessionTime")
                         .HasColumnType("bigint")
-                        .HasColumnName("AcctSessionTime");
+                        .HasColumnName("acctsessiontime");
 
                     b.Property<DateTime?>("AcctStartTime")
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("AcctStartTime");
+                        .HasColumnName("acctstarttime");
 
                     b.Property<DateTime?>("AcctStopTime")
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("AcctStopTime");
+                        .HasColumnName("acctstoptime");
 
                     b.Property<string>("AcctTerminateCause")
                         .HasColumnType("text")
-                        .HasColumnName("AcctTerminateCause");
+                        .HasColumnName("acctterminatecause");
 
                     b.Property<string>("AcctUniqueId")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("AcctUniqueId");
+                        .HasColumnName("acctuniqueid");
 
                     b.Property<DateTime?>("AcctUpdateTime")
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("AcctUpdateTime");
+                        .HasColumnName("acctupdatetime");
 
                     b.Property<string>("CalledStationId")
                         .HasColumnType("text")
-                        .HasColumnName("CalledStationId");
+                        .HasColumnName("calledstationid");
 
                     b.Property<string>("CallingStationId")
                         .HasColumnType("text")
-                        .HasColumnName("CallingStationId");
+                        .HasColumnName("callingstationid");
 
                     b.Property<string>("Class")
                         .HasColumnType("text")
-                        .HasColumnName("Class");
+                        .HasColumnName("class");
 
                     b.Property<string>("FramedIpAddress")
                         .HasColumnType("text")
-                        .HasColumnName("FramedIPAddress");
+                        .HasColumnName("framedipaddress");
 
                     b.Property<string>("FramedIpv6Address")
                         .HasColumnType("text")
-                        .HasColumnName("FramedIPv6Address");
+                        .HasColumnName("framedipv6address");
 
                     b.Property<string>("FramedProtocol")
                         .HasColumnType("text")
-                        .HasColumnName("FramedProtocol");
+                        .HasColumnName("framedprotocol");
 
                     b.Property<string>("NasIpAddress")
                         .HasColumnType("text")
-                        .HasColumnName("NASIPAddress");
+                        .HasColumnName("nasipaddress");
 
                     b.Property<string>("NasPortId")
                         .HasColumnType("text")
-                        .HasColumnName("NASPortId");
+                        .HasColumnName("nasportid");
 
                     b.Property<string>("NasPortType")
                         .HasColumnType("text")
-                        .HasColumnName("NASPortType");
+                        .HasColumnName("nasporttype");
 
                     b.Property<string>("Realm")
                         .HasColumnType("text")
-                        .HasColumnName("Realm");
+                        .HasColumnName("realm");
 
                     b.Property<string>("ServiceType")
                         .HasColumnType("text")
-                        .HasColumnName("ServiceType");
+                        .HasColumnName("servicetype");
 
                     b.Property<string>("UserName")
                         .HasColumnType("text")
-                        .HasColumnName("UserName");
+                        .HasColumnName("username");
 
                     b.HasKey("RadAcctId");
 
@@ -465,15 +465,15 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
 
                     b.Property<string>("CalledStationId")
                         .HasColumnType("text")
-                        .HasColumnName("CalledStationId");
+                        .HasColumnName("calledstationid");
 
                     b.Property<string>("CallingStationId")
                         .HasColumnType("text")
-                        .HasColumnName("CallingStationId");
+                        .HasColumnName("callingstationid");
 
                     b.Property<string>("Class")
                         .HasColumnType("text")
-                        .HasColumnName("Class");
+                        .HasColumnName("class");
 
                     b.Property<string>("Pass")
                         .HasColumnType("text")
@@ -507,7 +507,7 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("Attribute")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Attribute");
+                        .HasColumnName("attribute");
 
                     b.Property<string>("Op")
                         .IsRequired()
@@ -517,12 +517,12 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("UserName");
+                        .HasColumnName("username");
 
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Value");
+                        .HasColumnName("value");
 
                     b.HasKey("Id");
 
@@ -543,12 +543,12 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("Attribute")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Attribute");
+                        .HasColumnName("attribute");
 
                     b.Property<string>("GroupName")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("GroupName");
+                        .HasColumnName("groupname");
 
                     b.Property<string>("Op")
                         .IsRequired()
@@ -558,7 +558,7 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Value");
+                        .HasColumnName("value");
 
                     b.HasKey("Id");
 
@@ -579,12 +579,12 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("Attribute")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Attribute");
+                        .HasColumnName("attribute");
 
                     b.Property<string>("GroupName")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("GroupName");
+                        .HasColumnName("groupname");
 
                     b.Property<string>("Op")
                         .IsRequired()
@@ -594,7 +594,7 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Value");
+                        .HasColumnName("value");
 
                     b.HasKey("Id");
 
@@ -615,7 +615,7 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("Attribute")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Attribute");
+                        .HasColumnName("attribute");
 
                     b.Property<string>("Op")
                         .IsRequired()
@@ -625,12 +625,12 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("UserName");
+                        .HasColumnName("username");
 
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("Value");
+                        .HasColumnName("value");
 
                     b.HasKey("Id");
 
@@ -651,7 +651,7 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("GroupName")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("GroupName");
+                        .HasColumnName("groupname");
 
                     b.Property<int>("Priority")
                         .HasColumnType("integer")
@@ -660,13 +660,118 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("UserName");
+                        .HasColumnName("username");
 
                     b.HasKey("Id");
 
                     b.HasIndex("UserName");
 
                     b.ToTable("radusergroup");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Roles.Core.Models.Permission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Group")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("group");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("permissions");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Roles.Core.Models.Role", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsSystemRole")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_system_role");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("roles");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Roles.Core.Models.RolePermission", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .HasColumnType("integer")
+                        .HasColumnName("role_id");
+
+                    b.Property<int>("PermissionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("permission_id");
+
+                    b.HasKey("RoleId", "PermissionId");
+
+                    b.ToTable("role_permissions");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Roles.Core.Models.UserPermission", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<int>("PermissionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("permission_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsGranted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_granted");
+
+                    b.HasKey("UserId", "PermissionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("user_permissions");
                 });
 
             modelBuilder.Entity("InternetProvider.Api.Modules.Settings.Core.Models.Setting", b =>
@@ -767,82 +872,6 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.ToTable("subscriptions");
                 });
 
-            modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.Permission", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("code");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Group")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("group");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.ToTable("permissions");
-                });
-
-            modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.Role", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<bool>("IsSystemRole")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_system_role");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("name");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("roles");
-                });
-
-            modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.RolePermission", b =>
-                {
-                    b.Property<int>("RoleId")
-                        .HasColumnType("integer")
-                        .HasColumnName("role_id");
-
-                    b.Property<int>("PermissionId")
-                        .HasColumnType("integer")
-                        .HasColumnName("permission_id");
-
-                    b.HasKey("RoleId", "PermissionId");
-
-                    b.ToTable("role_permissions");
-                });
-
             modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.User", b =>
                 {
                     b.Property<int>("Id")
@@ -901,38 +930,9 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.ToTable("users");
                 });
 
-            modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.UserPermission", b =>
-                {
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id");
-
-                    b.Property<int>("PermissionId")
-                        .HasColumnType("integer")
-                        .HasColumnName("permission_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<int?>("CreatedBy")
-                        .HasColumnType("integer")
-                        .HasColumnName("created_by");
-
-                    b.Property<bool>("IsGranted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_granted");
-
-                    b.HasKey("UserId", "PermissionId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("user_permissions");
-                });
-
             modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.User", b =>
                 {
-                    b.HasOne("InternetProvider.Api.Modules.Users.Core.Models.Role", "Role")
+                    b.HasOne("InternetProvider.Api.Modules.Roles.Core.Models.Role", "Role")
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)

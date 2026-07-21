@@ -37,8 +37,7 @@ public class UserService : IUserService
 
         if (user == null)
         {
-            _log.LogWarning("User {UserId} not found — returning null", id);
-            return null;
+            throw new NotFoundException($"This user not found");
         }
 
         _log.LogInformation("Returning user {UserId}: {Email}", id, user.Email);

@@ -10,10 +10,10 @@ public class RadUserGroup
     [Column("id")]
     public int Id { get; set; }
 
-    [Column("UserName")]
+    [Column("username")]
     public string UserName { get; set; } = string.Empty;
 
-    [Column("GroupName")]
+    [Column("groupname")]
     public string GroupName { get; set; } = string.Empty;
 
     [Column("priority")]

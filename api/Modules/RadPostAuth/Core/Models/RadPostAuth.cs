@@ -19,15 +19,15 @@ public class RadPostAuth
     [Column("reply")]
     public string? Reply { get; set; }
 
-    [Column("CalledStationId")]
+    [Column("calledstationid")]
     public string? CalledStationId { get; set; }
 
-    [Column("CallingStationId")]
+    [Column("callingstationid")]
     public string? CallingStationId { get; set; }
 
     [Column("authdate")]
     public DateTime AuthDate { get; set; }
 
-    [Column("Class")]
+    [Column("class")]
     public string? Class { get; set; }
 }

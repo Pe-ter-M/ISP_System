@@ -10,15 +10,15 @@ public class RadGroupReply
     [Column("id")]
     public int Id { get; set; }
 
-    [Column("GroupName")]
+    [Column("groupname")]
     public string GroupName { get; set; } = string.Empty;
 
-    [Column("Attribute")]
+    [Column("attribute")]
     public string Attribute { get; set; } = string.Empty;
 
     [Column("op")]
     public string Op { get; set; } = "=";
 
-    [Column("Value")]
+    [Column("value")]
     public string Value { get; set; } = string.Empty;
 }

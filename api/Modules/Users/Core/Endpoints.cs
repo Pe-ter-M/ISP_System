@@ -26,8 +26,6 @@ public static class UserEndpoints
         {
             log.LogInformation("GET /api/users/{UserId} called", id);
             var user = await service.GetByIdAsync(id);
-            if (user == null)
-                throw new NotFoundException($"User {id} not found");
             return ApiResponse.Success(user, "User found").ToResult();
         })
         .RequirePermission(Permissions.UsersView);
