@@ -8,6 +8,10 @@ using InternetProvider.Api.Modules.Auth.Core;
 using InternetProvider.Api.Modules.Auth.Interfaces;
 using InternetProvider.Api.Modules.Users.Interfaces;
 using InternetProvider.Api.Modules.Users.Core;
+using InternetProvider.Api.Modules.Settings.Interfaces;
+using InternetProvider.Api.Modules.Settings.Core;
+using InternetProvider.Api.Modules.Organization.Interfaces;
+using InternetProvider.Api.Modules.Organization.Core;
 using InternetProvider.Api.Services;
 
 // ── Serilog bootstrap (catches startup errors before config loads) ──
@@ -41,6 +45,14 @@ try
     // ── User services ────────────────────────────────────────────
     builder.Services.AddScoped<IUserRepository, UserRepository>();
     builder.Services.AddScoped<IUserService, UserService>();
+
+    // ── Settings services ────────────────────────────────────────────
+    builder.Services.AddScoped<ISettingRepository, SettingRepository>();
+    builder.Services.AddScoped<ISettingService, SettingService>();
+
+    // ── Organization services ────────────────────────────────────────
+    builder.Services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+    builder.Services.AddScoped<IOrganizationService, OrganizationService>();
 
     builder.Services.AddOpenApi(options =>
 {

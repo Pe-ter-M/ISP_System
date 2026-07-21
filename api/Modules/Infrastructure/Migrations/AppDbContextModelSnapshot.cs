@@ -178,6 +178,10 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Address")
+                        .HasColumnType("text")
+                        .HasColumnName("address");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -212,6 +216,14 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("ShortName")
                         .HasColumnType("text")
                         .HasColumnName("short_name");
+
+                    b.Property<string>("SupportEmail")
+                        .HasColumnType("text")
+                        .HasColumnName("support_email");
+
+                    b.Property<string>("SupportPhone")
+                        .HasColumnType("text")
+                        .HasColumnName("support_phone");
 
                     b.Property<string>("Tagline")
                         .HasColumnType("text")

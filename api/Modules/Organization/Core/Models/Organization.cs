@@ -31,6 +31,15 @@ public class Organization
     [Column("timezone")]
     public string Timezone { get; set; } = "Africa/Nairobi";
 
+    [Column("support_email")]
+    public string? SupportEmail { get; set; }
+
+    [Column("support_phone")]
+    public string? SupportPhone { get; set; }
+
+    [Column("address")]
+    public string? Address { get; set; }
+
     [Column("setup_completed")]
     public bool SetupCompleted { get; set; }
 

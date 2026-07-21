@@ -1,15 +1,6 @@
 <template>
-  <div class="about">
-    <h1>This is an about page</h1>
+  <div class="text-center py-20">
+    <h1 class="text-4xl font-bold text-gray-800 mb-4">This is the About Page</h1>
+    <p class="text-gray-500 text-lg">Learn more about PhantomNet</p>
   </div>
 </template>
-
-<style>
-@media (min-width: 1024px) {
-  .about {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-  }
-}
-</style>
