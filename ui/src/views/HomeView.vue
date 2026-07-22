@@ -16,98 +16,89 @@ onMounted(async () => {
     loading.value = false
   }
 })
-
-const renderField = (label: string, value: any) => {
-  return (
-    <div class="flex justify-between py-2 border-b border-gray-200">
-      <span class="font-semibold text-gray-700">{label}:</span>
-      <span class="text-gray-600">{value || 'N/A'}</span>
-    </div>
-  )
-}
 </script>
 
 <template>
   <div class="max-w-4xl mx-auto p-8">
-    <h1 class="text-4xl font-bold text-gray-800 mb-2">PhantomNet ISP Manager</h1>
-    <p class="text-gray-500 text-lg mb-8">Welcome to your ISP Management System</p>
+    <h1 class="text-4xl font-bold text-gray-800 dark:text-gray-100 mb-2">PhantomNet ISP Manager</h1>
+    <p class="text-gray-500 dark:text-gray-400 text-lg mb-8">Welcome to your ISP Management System</p>
 
     <div v-if="loading" class="text-center py-8">
-      <p class="text-gray-500 text-lg">Loading organization data...</p>
+      <p class="text-gray-500 dark:text-gray-400 text-lg">Loading organization data...</p>
     </div>
 
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
-      <h2 class="text-xl font-bold text-red-700 mb-2">Error</h2>
-      <p class="text-red-600">{{ error }}</p>
+    <div v-else-if="error" class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-6">
+      <h2 class="text-xl font-bold text-red-700 dark:text-red-400 mb-2">Error</h2>
+      <p class="text-red-600 dark:text-red-300">{{ error }}</p>
     </div>
 
-    <div v-else class="bg-white rounded-lg shadow-lg p-6">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">Organization Details</h2>
+    <div v-else class="bg-white dark:bg-gray-900 rounded-lg shadow-lg dark:shadow-gray-900/50 p-6 transition-colors">
+      <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Organization Details</h2>
       
       <div v-if="organizationStore.setupCompleted" class="space-y-2">
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">ID:</span>
-          <span class="text-gray-600">{{ organizationStore.id }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">ID:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.id }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Organization Name:</span>
-          <span class="text-gray-600">{{ organizationStore.name }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Organization Name:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.name }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Short Name:</span>
-          <span class="text-gray-600">{{ organizationStore.shortName || 'N/A' }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Short Name:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.shortName || 'N/A' }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Tagline:</span>
-          <span class="text-gray-600">{{ organizationStore.tagline || 'N/A' }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Tagline:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.tagline || 'N/A' }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Currency:</span>
-          <span class="text-gray-600">{{ organizationStore.currency }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Currency:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.currency }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Currency Symbol:</span>
-          <span class="text-gray-600">{{ organizationStore.currencySymbol }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Currency Symbol:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.currencySymbol }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Timezone:</span>
-          <span class="text-gray-600">{{ organizationStore.timezone }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Timezone:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.timezone }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Support Email:</span>
-          <span class="text-gray-600">{{ organizationStore.supportEmail || 'N/A' }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Support Email:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.supportEmail || 'N/A' }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Support Phone:</span>
-          <span class="text-gray-600">{{ organizationStore.supportPhone || 'N/A' }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Support Phone:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.supportPhone || 'N/A' }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Address:</span>
-          <span class="text-gray-600">{{ organizationStore.address || 'N/A' }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Address:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.address || 'N/A' }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Created At:</span>
-          <span class="text-gray-600">{{ organizationStore.createdAt }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Created At:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.createdAt }}</span>
         </div>
         
-        <div class="flex justify-between py-2 border-b border-gray-200">
-          <span class="font-semibold text-gray-700">Updated At:</span>
-          <span class="text-gray-600">{{ organizationStore.updatedAt }}</span>
+        <div class="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+          <span class="font-semibold text-gray-700 dark:text-gray-300">Updated At:</span>
+          <span class="text-gray-600 dark:text-gray-400">{{ organizationStore.updatedAt }}</span>
         </div>
       </div>
       
       <div v-else class="text-center py-8">
-        <p class="text-gray-500 text-lg">Organization setup is not completed yet</p>
+        <p class="text-gray-500 dark:text-gray-400 text-lg">Organization setup is not completed yet</p>
       </div>
     </div>
   </div>

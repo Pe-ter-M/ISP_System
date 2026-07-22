@@ -1,6 +1,6 @@
 <template>
   <div class="text-center py-20">
-    <h1 class="text-4xl font-bold text-gray-800 mb-4">This is the Contact Page</h1>
-    <p class="text-gray-500 text-lg">Get in touch with us</p>
+    <h1 class="text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">This is the Contact Page</h1>
+    <p class="text-gray-500 dark:text-gray-400 text-lg">Get in touch with us</p>
   </div>
 </template>
