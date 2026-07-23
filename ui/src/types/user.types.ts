@@ -1,4 +1,4 @@
-export interface UserResponse {
+export interface UserDetail {
   id: number
   email: string
   fullName: string
@@ -9,10 +9,10 @@ export interface UserResponse {
   createdAt: string
 }
 
-export interface CreateUserRequest {
-  email: string
-  password: string
-  fullName: string
-  phone: string | null
-  roleId: number
+export interface PaginatedUsers {
+  items: UserDetail[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
 }

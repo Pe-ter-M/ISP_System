@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using InternetProvider.Api.Modules.Users.Core.Models;
 using InternetProvider.Api.Modules.Users.Interfaces;
+using InternetProvider.Api.Modules.Users.Dtos;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 
 namespace InternetProvider.Api.Modules.Users.Core;
@@ -44,19 +45,45 @@ public class UserRepository : IUserRepository
         return user;
     }
 
-    public async Task<List<User>> GetAllAsync()
+    public async Task<PaginatedResponse<User>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false)
     {
-        _log.LogDebug("Fetching all users from database");
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var query = _db.Users.Include(u => u.Role).AsQueryable();
 
-        var users = await _db.Users
-            .Include(u => u.Role)
-            .OrderBy(u => u.Id)
+        // ── Search ──
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(u =>
+                u.FullName.ToLower().Contains(term) ||
+                u.Email.ToLower().Contains(term) ||
+                (u.Phone != null && u.Phone.Contains(term)));
+        }
+
+        // ── Sort ──
+        query = (sortBy?.ToLower()) switch
+        {
+            "name" => sortDesc ? query.OrderByDescending(u => u.FullName) : query.OrderBy(u => u.FullName),
+            "email" => sortDesc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
+            "role" => sortDesc ? query.OrderByDescending(u => u.Role!.Name) : query.OrderBy(u => u.Role!.Name),
+            "active" => sortDesc ? query.OrderByDescending(u => u.IsActive) : query.OrderBy(u => u.IsActive),
+            "created" => sortDesc ? query.OrderByDescending(u => u.CreatedAt) : query.OrderBy(u => u.CreatedAt),
+            _ => query.OrderBy(u => u.Id) // default
+        };
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        sw.Stop();
-        _log.LogDebug("Retrieved {Count} users from database in {ElapsedMs}ms", users.Count, sw.ElapsedMilliseconds);
-        return users;
+        _log.LogDebug("Fetched {Count}/{Total} users (page {Page}, size {PageSize})", items.Count, totalCount, page, pageSize);
+        return new PaginatedResponse<User>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<User> CreateAsync(User user)

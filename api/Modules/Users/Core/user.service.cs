@@ -16,18 +16,18 @@ public class UserService : IUserService
         _log = log;
     }
 
-    public async Task<List<UserResponse>> GetAllAsync()
+    public async Task<PaginatedResponse<UserResponse>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false)
     {
-        _log.LogDebug("Processing get all users request");
-        var users = await _repo.GetAllAsync();
-        if (users.Count == 0)
+        _log.LogDebug("Processing get users (page {Page}, size {PageSize})", page, pageSize);
+        var result = await _repo.GetAllAsync(page, pageSize, search, sortBy, sortDesc);
+
+        return new PaginatedResponse<UserResponse>
         {
-            _log.LogInformation("No users found in the database");
-            throw new NotFoundException("No users found");
-        }
-        var responses = users.Select(MapToResponse).ToList();
-        _log.LogDebug("Returning {Count} user records", responses.Count);
-        return responses;
+            Items = result.Items.Select(MapToResponse).ToList(),
+            TotalCount = result.TotalCount,
+            Page = result.Page,
+            PageSize = result.PageSize,
+        };
     }
 
     public async Task<UserResponse?> GetByIdAsync(int id)
@@ -37,7 +37,7 @@ public class UserService : IUserService
 
         if (user == null)
         {
-            throw new NotFoundException($"This user not found");
+            throw new NotFoundException($"User not found");
         }
 
         _log.LogInformation("Returning user {UserId}: {Email}", id, user.Email);
@@ -48,6 +48,14 @@ public class UserService : IUserService
     {
         _log.LogInformation("Processing create user request for email {Email} with role {RoleId}",
             request.Email, request.RoleId);
+
+        // Server-side validation
+        if (string.IsNullOrWhiteSpace(request.Email))
+            throw new ConflictException("Email is required");
+        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 4)
+            throw new ConflictException("Password must be at least 4 characters");
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            throw new ConflictException("Full name is required");
 
         if (await _repo.EmailExistsAsync(request.Email))
         {
