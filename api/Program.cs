@@ -12,6 +12,8 @@ using InternetProvider.Api.Modules.Settings.Interfaces;
 using InternetProvider.Api.Modules.Settings.Core;
 using InternetProvider.Api.Modules.Organization.Interfaces;
 using InternetProvider.Api.Modules.Organization.Core;
+using InternetProvider.Api.Modules.Plans.Interfaces;
+using InternetProvider.Api.Modules.Plans.Core;
 using InternetProvider.Api.Services;
 
 // ── Serilog bootstrap (catches startup errors before config loads) ──
@@ -53,6 +55,10 @@ try
     // ── Organization services ────────────────────────────────────────
     builder.Services.AddScoped<IOrganizationRepository, OrganizationRepository>();
     builder.Services.AddScoped<IOrganizationService, OrganizationService>();
+
+    // ── Plan services ────────────────────────────────────────────────
+    builder.Services.AddScoped<IPlanRepository, PlanRepository>();
+    builder.Services.AddScoped<IPlanService, PlanService>();
 
     builder.Services.AddOpenApi(options =>
 {

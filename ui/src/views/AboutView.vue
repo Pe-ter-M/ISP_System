@@ -67,6 +67,20 @@ const org = useOrganizationStore()
       </div>
     </section>
 
+    <!-- ── Plans CTA ── -->
+    <section class="py-12 sm:py-16 text-center">
+      <div class="bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-700 dark:to-blue-900 rounded-2xl p-8 sm:p-10 text-white shadow-xl">
+        <h2 class="text-3xl sm:text-4xl font-bold mb-4">See Our Plans</h2>
+        <p class="text-blue-100 text-lg mb-6 max-w-xl mx-auto">Choose from our range of reliable and affordable internet plans tailored for you.</p>
+        <router-link
+          to="/plans"
+          class="inline-block px-8 py-3 bg-white text-blue-700 font-semibold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-xl"
+        >
+          Browse Plans →
+        </router-link>
+      </div>
+    </section>
+
     <!-- ── Technology Stack ── -->
     <section class="py-12 sm:py-16">
       <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-8 text-center">Our Technology</h2>

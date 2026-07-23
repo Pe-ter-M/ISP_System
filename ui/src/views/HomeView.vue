@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { useOrganizationStore } from '@/stores/organization.store'
-import { useRouter } from 'vue-router'
 
 const org = useOrganizationStore()
-const router = useRouter()
 </script>
 
 <template>
@@ -21,10 +19,10 @@ const router = useRouter()
         </p>
         <div class="flex flex-wrap gap-4 pt-4">
           <router-link
-            to="/contact"
+            to="/plans"
             class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-blue-500/25"
           >
-            Get Started
+            View Our Plans
           </router-link>
           <router-link
             to="/about"
@@ -104,17 +102,35 @@ const router = useRouter()
       </div>
     </section>
 
+    <!-- ── Plans Section ── -->
+    <section class="py-16 sm:py-20">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Choose Your Plan</h2>
+        <p class="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">We offer flexible internet plans designed to fit your needs and budget.</p>
+      </div>
+      <div class="text-center">
+        <router-link
+          to="/plans"
+          class="inline-flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all duration-200 hover:scale-105 shadow-lg"
+        >
+          View All Plans
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          </svg>
+        </router-link>
+      </div>
+    </section>
+
     <!-- ── CTA Section ── -->
     <section class="py-16 sm:py-20">
       <div class="bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-700 dark:to-blue-900 rounded-2xl p-8 sm:p-12 text-center text-white shadow-xl">
         <h2 class="text-3xl sm:text-4xl font-bold mb-4">Ready to get started?</h2>
-        <p class="text-blue-100 text-lg mb-8 max-w-2xl mx-auto">Join thousands of satisfied customers who trust {{ org.name || 'PhantomNet' }} for their internet needs.</p>
-        <!-- TODO: Add proper signup/contact flow -->
+        <p class="text-blue-100 text-lg mb-8 max-w-2xl mx-auto">Pick a plan that works for you and get connected today.</p>
         <router-link
-          to="/contact"
+          to="/plans"
           class="inline-block px-8 py-3 bg-white text-blue-700 font-semibold rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-xl"
         >
-          Contact Us Today
+          Browse Plans
         </router-link>
       </div>
     </section>
