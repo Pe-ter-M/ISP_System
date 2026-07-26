@@ -16,6 +16,8 @@ using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Core;
 using InternetProvider.Api.Modules.Customers.Interfaces;
 using InternetProvider.Api.Modules.Customers.Core;
+using InternetProvider.Api.Modules.Nas.Interfaces;
+using InternetProvider.Api.Modules.Nas.Core;
 using InternetProvider.Api.Services;
 
 // ── Serilog bootstrap (catches startup errors before config loads) ──
@@ -66,6 +68,10 @@ try
     builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
     builder.Services.AddScoped<ICustomerService, CustomerService>();
 
+    // ── NAS services ─────────────────────────────────────────────────
+    builder.Services.AddScoped<INasRepository, NasRepository>();
+    builder.Services.AddScoped<INasService, NasService>();
+
     builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, context, cancellationToken) =>
@@ -93,8 +99,7 @@ try
         app.MapScalarApiReference(options =>
         {
             options.WithTitle("Internet Provider API")
-                   .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
-                   .WithPreferredScheme("Bearer");
+                   .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
         });
     }
 

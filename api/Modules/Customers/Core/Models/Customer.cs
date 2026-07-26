@@ -1,4 +1,4 @@
-369369using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace InternetProvider.Api.Modules.Customers.Core.Models;
