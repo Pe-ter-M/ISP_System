@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+369369using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace InternetProvider.Api.Modules.Customers.Core.Models;
@@ -11,13 +11,10 @@ public class Customer
     public int Id { get; set; }
 
     [Column("user_id")]
-    public int? UserId { get; set; }
+    public int UserId { get; set; }
 
     [Column("customer_code")]
     public string CustomerCode { get; set; } = string.Empty;
-
-    [Column("full_name")]
-    public string FullName { get; set; } = string.Empty;
 
     [Column("business_name")]
     public string? BusinessName { get; set; }
@@ -25,14 +22,8 @@ public class Customer
     [Column("customer_type")]
     public string CustomerType { get; set; } = "residential";
 
-    [Column("email")]
-    public string? Email { get; set; }
-
-    [Column("phone_primary")]
-    public string? PhonePrimary { get; set; }
-
-    [Column("phone_secondary")]
-    public string? PhoneSecondary { get; set; }
+    [Column("phone")]
+    public string Phone { get; set; } = string.Empty;
 
     [Column("service_address")]
     public string? ServiceAddress { get; set; }

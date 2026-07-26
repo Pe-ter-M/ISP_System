@@ -26,7 +26,7 @@ const router = createRouter({
       children: [
         { path: 'dashboard', name: 'dashboard', component: () => import('../views/admin/DashboardView.vue'), meta: { title: 'Dashboard' } },
         { path: 'profile', name: 'profile', component: () => import('../views/admin/ProfileView.vue'), meta: { title: 'Profile' } },
-        { path: 'customers', name: 'customers', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Customers' } },
+        { path: 'customers', name: 'customers', component: () => import('../views/admin/CustomersView.vue'), meta: { title: 'Customers' } },
         { path: 'subscriptions', name: 'subscriptions', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Subscriptions' } },
         { path: 'plans', name: 'admin-plans', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Plans' } },
         { path: 'sessions', name: 'sessions', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Live Sessions' } },
