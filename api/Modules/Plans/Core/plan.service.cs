@@ -16,28 +16,41 @@ public class PlanService : IPlanService
         _log = log;
     }
 
-    public async Task<List<PlanSummaryResponse>> GetAllAsync()
+    public async Task<List<PlanSummaryResponse>> GetAllAsync(bool includeSubscribersCount = false)
     {
-        _log.LogDebug("Processing get all plans request");
+        _log.LogDebug("Processing get all plans request (includeSubscribersCount: {IncludeCount})", includeSubscribersCount);
         var plans = await _repo.GetAllActiveAsync();
-        var responses = plans.Select(p => new PlanSummaryResponse
+        
+        var responses = new List<PlanSummaryResponse>();
+        foreach (var p in plans)
         {
-            Id = p.Id,
-            Name = p.Name,
-            Description = p.Description,
-            PriceCents = p.PriceCents,
-            BillingCycle = p.BillingCycle,
-            BandwidthUpKbps = p.BandwidthUpKbps,
-            BandwidthDownKbps = p.BandwidthDownKbps,
-            MaxDevices = p.MaxDevices,
-        }).ToList();
+            int? count = null;
+            if (includeSubscribersCount)
+            {
+                count = await _repo.GetActiveSubscribersCountAsync(p.Id);
+            }
+
+            responses.Add(new PlanSummaryResponse
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                PriceCents = p.PriceCents,
+                BillingCycle = p.BillingCycle,
+                BandwidthUpKbps = p.BandwidthUpKbps,
+                BandwidthDownKbps = p.BandwidthDownKbps,
+                MaxDevices = p.MaxDevices,
+                ActiveSubscribersCount = count
+            });
+        }
+        
         _log.LogDebug("Returning {Count} plan summaries", responses.Count);
         return responses;
     }
 
-    public async Task<PlanDetailResponse> GetDetailByIdAsync(int id)
+    public async Task<PlanDetailResponse> GetDetailByIdAsync(int id, bool includeSubscribersCount = false)
     {
-        _log.LogDebug("Processing get plan detail for ID {PlanId}", id);
+        _log.LogDebug("Processing get plan detail for ID {PlanId} (includeSubscribersCount: {IncludeCount})", id, includeSubscribersCount);
         var plan = await _repo.GetByIdAsync(id);
 
         if (plan == null)
@@ -47,6 +60,12 @@ public class PlanService : IPlanService
         }
 
         var groupName = await _repo.GetGroupNameAsync(plan.RadiusGroupId) ?? "";
+        
+        int? count = null;
+        if (includeSubscribersCount)
+        {
+            count = await _repo.GetActiveSubscribersCountAsync(plan.Id);
+        }
 
         return new PlanDetailResponse
         {
@@ -63,6 +82,7 @@ public class PlanService : IPlanService
             IsActive = plan.IsActive,
             SortOrder = plan.SortOrder,
             GroupName = groupName,
+            ActiveSubscribersCount = count
         };
     }
 

@@ -12,4 +12,5 @@ public interface IPlanRepository
     Task SyncGroupPolicyAsync(RadiusPackage plan);
     Task<RadiusPackage> UpdatePlanWithPolicyAsync(RadiusPackage plan);
     Task DeleteAsync(RadiusPackage plan);
+    Task<int> GetActiveSubscribersCountAsync(int planId);
 }

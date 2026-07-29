@@ -276,4 +276,17 @@ public class PlanRepository : IPlanRepository
         await tx.CommitAsync();
         _log.LogDebug("Plan {PlanId} and its associated RADIUS policy for group {Group} deleted atomically", plan.Id, groupName ?? "Unknown");
     }
+
+    public async Task<int> GetActiveSubscribersCountAsync(int planId)
+    {
+        _log.LogDebug("Fetching active subscriber count for plan ID {PlanId}", planId);
+        
+        // Count active subscriptions tied to this Plan package ID
+        var count = await _db.Subscriptions
+            .Where(s => s.PackageId == planId && s.Status == "active")
+            .CountAsync();
+            
+        _log.LogDebug("Found {Count} active subscribers for plan ID {PlanId}", count, planId);
+        return count;
+    }
 }

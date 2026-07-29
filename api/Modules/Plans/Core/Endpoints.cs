@@ -11,18 +11,27 @@ public static class PlanEndpoints
         // ── Public endpoints (no auth) ──
         var publicGroup = app.MapGroup("/api/plans").WithTags("Plans Public");
 
-        publicGroup.MapGet("/", async (IPlanService service, ILogger<LoggerMarker> log) =>
+        publicGroup.MapGet("/", async (
+            bool? subscribersCount, 
+            IPlanService service, 
+            ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/plans called");
-            var plans = await service.GetAllAsync();
+            var includeCount = subscribersCount ?? false;
+            var plans = await service.GetAllAsync(includeCount);
             log.LogInformation("Returning {Count} plans", plans.Count);
             return ApiResponse.Success(plans, $"Found {plans.Count} plans").ToResult();
         });
 
-        publicGroup.MapGet("/{id:int}", async (int id, IPlanService service, ILogger<LoggerMarker> log) =>
+        publicGroup.MapGet("/{id:int}", async (
+            int id, 
+            bool? subscribersCount, 
+            IPlanService service, 
+            ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/plans/{PlanId} called", id);
-            var plan = await service.GetDetailByIdAsync(id);
+            var includeCount = subscribersCount ?? false;
+            var plan = await service.GetDetailByIdAsync(id, includeCount);
             log.LogInformation("Returning plan detail for {PlanId}: {Name}", id, plan.Name);
             return ApiResponse.Success(plan, "Plan details retrieved").ToResult();
         });
