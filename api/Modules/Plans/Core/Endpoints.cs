@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Dtos;
@@ -25,17 +22,9 @@ public static class PlanEndpoints
         publicGroup.MapGet("/{id:int}", async (int id, IPlanService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/plans/{PlanId} called", id);
-
-            try
-            {
-                var plan = await service.GetDetailByIdAsync(id);
-                return ApiResponse.Success(plan, "Plan details retrieved").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                log.LogWarning("Plan {PlanId} not found", id);
-                return ApiResponse.Error("Plan not found", 404).ToResult();
-            }
+            var plan = await service.GetDetailByIdAsync(id);
+            log.LogInformation("Returning plan detail for {PlanId}: {Name}", id, plan.Name);
+            return ApiResponse.Success(plan, "Plan details retrieved").ToResult();
         });
 
         // ── Admin endpoints (auth required) ──
@@ -44,53 +33,27 @@ public static class PlanEndpoints
         adminGroup.MapPost("/", async (CreatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/admin/plans — creating {Name}", req.Name);
-
-            try
-            {
-                var plan = await service.CreateAsync(req);
-                return ApiResponse.Success(new { plan.Id, plan.Name }, "Plan created successfully").ToResult();
-            }
-            catch (ConflictException ex)
-            {
-                log.LogWarning("Conflict creating plan: {Message}", ex.Message);
-                return ApiResponse.Error(ex.Message, 409).ToResult();
-            }
+            var plan = await service.CreateAsync(req);
+            log.LogInformation("Plan created successfully: {PlanId} — {Name}", plan.Id, plan.Name);
+            return ApiResponse.Success(plan, "Plan created successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansCreate);
 
         adminGroup.MapPut("/{id:int}", async (int id, UpdatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/admin/plans/{PlanId} called", id);
-
-            try
-            {
-                var plan = await service.UpdateAsync(id, req);
-                return ApiResponse.Success(new { plan.Id, plan.Name }, "Plan updated successfully").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                return ApiResponse.Error("Plan not found", 404).ToResult();
-            }
-            catch (ConflictException ex)
-            {
-                return ApiResponse.Error(ex.Message, 409).ToResult();
-            }
+            var plan = await service.UpdateAsync(id, req);
+            log.LogInformation("Plan {PlanId} updated successfully", id);
+            return ApiResponse.Success(plan, "Plan updated successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansUpdate);
 
         adminGroup.MapDelete("/{id:int}", async (int id, IPlanService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/admin/plans/{PlanId} called", id);
-
-            try
-            {
-                await service.DeleteAsync(id);
-                return ApiResponse.Success(null, "Plan deactivated successfully").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                return ApiResponse.Error("Plan not found", 404).ToResult();
-            }
+            await service.DeleteAsync(id);
+            log.LogInformation("Plan {PlanId} and associated RADIUS policy deleted", id);
+            return ApiResponse.Success(null, "Plan and its RADIUS policies deleted successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansDelete);
     }

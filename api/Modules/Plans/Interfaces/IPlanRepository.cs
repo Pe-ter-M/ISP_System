@@ -7,8 +7,9 @@ public interface IPlanRepository
     Task<List<RadiusPackage>> GetAllActiveAsync();
     Task<RadiusPackage?> GetByIdAsync(int id);
     Task<RadiusPackage> CreateAsync(RadiusPackage plan);
-    Task UpdateAsync(RadiusPackage plan);
     Task<bool> NameExistsAsync(string name);
     Task<string?> GetGroupNameAsync(int groupId);
-    Task SyncGroupQosAsync(RadiusPackage plan);
+    Task SyncGroupPolicyAsync(RadiusPackage plan);
+    Task<RadiusPackage> UpdatePlanWithPolicyAsync(RadiusPackage plan);
+    Task DeleteAsync(RadiusPackage plan);
 }

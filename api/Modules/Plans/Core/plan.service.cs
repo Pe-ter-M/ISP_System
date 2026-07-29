@@ -48,7 +48,6 @@ public class PlanService : IPlanService
 
         var groupName = await _repo.GetGroupNameAsync(plan.RadiusGroupId) ?? "";
 
-        _log.LogInformation("Returning plan detail for {PlanId}: {Name}", id, plan.Name);
         return new PlanDetailResponse
         {
             Id = plan.Id,
@@ -69,7 +68,26 @@ public class PlanService : IPlanService
 
     public async Task<PlanSummaryResponse> CreateAsync(CreatePlanRequest request)
     {
-        _log.LogInformation("Processing create plan request: {Name}", request.Name);
+        _log.LogDebug("Processing create plan request: {Name}", request.Name);
+
+        // Server-side validation
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ConflictException("Plan name is required");
+        if (request.PriceCents < 0)
+            throw new ConflictException("Plan price cannot be negative");
+        
+        var maxDevices = request.MaxDevices ?? 1;
+        if (maxDevices <= 0)
+            throw new ConflictException("Max devices must be 1 or greater");
+
+        if (request.SessionTimeoutSeconds is < 0)
+            throw new ConflictException("Session timeout cannot be negative");
+        if (request.IdleTimeoutSeconds is < 0)
+            throw new ConflictException("Idle timeout cannot be negative");
+        if (request.BandwidthUpKbps is < 0)
+            throw new ConflictException("Upload bandwidth cannot be negative");
+        if (request.BandwidthDownKbps is < 0)
+            throw new ConflictException("Download bandwidth cannot be negative");
 
         if (await _repo.NameExistsAsync(request.Name))
         {
@@ -88,7 +106,7 @@ public class PlanService : IPlanService
             BandwidthDownKbps = request.BandwidthDownKbps,
             SessionTimeoutSeconds = request.SessionTimeoutSeconds ?? 86400,
             IdleTimeoutSeconds = request.IdleTimeoutSeconds ?? 600,
-            MaxDevices = request.MaxDevices ?? 1,
+            MaxDevices = maxDevices,
             IsActive = true,
             SortOrder = request.SortOrder ?? 0,
             CreatedAt = DateTime.UtcNow,
@@ -99,7 +117,6 @@ public class PlanService : IPlanService
         // Sync QoS to radgroupreply
         await SyncQos(created);
 
-        _log.LogInformation("Plan created successfully: {PlanId} — {Name}", created.Id, created.Name);
         return new PlanSummaryResponse
         {
             Id = created.Id,
@@ -115,7 +132,7 @@ public class PlanService : IPlanService
 
     public async Task<PlanSummaryResponse> UpdateAsync(int id, UpdatePlanRequest request)
     {
-        _log.LogInformation("Processing update plan request for ID {PlanId}", id);
+        _log.LogDebug("Processing update plan request for ID {PlanId}", id);
 
         var plan = await _repo.GetByIdAsync(id);
         if (plan == null)
@@ -123,6 +140,24 @@ public class PlanService : IPlanService
             _log.LogWarning("Plan {PlanId} not found for update", id);
             throw new NotFoundException($"Plan with ID {id} not found");
         }
+
+        // Server-side validation
+        if (request.Name != null && string.IsNullOrWhiteSpace(request.Name))
+            throw new ConflictException("Plan name cannot be empty");
+        if (request.PriceCents.HasValue && request.PriceCents.Value < 0)
+            throw new ConflictException("Plan price cannot be negative");
+        var maxDevices = request.MaxDevices ?? 1;
+        if (maxDevices <= 0)
+            throw new ConflictException("Max devices must be 1 or greater");
+
+        if (request.SessionTimeoutSeconds.HasValue && request.SessionTimeoutSeconds.Value < 0)
+            throw new ConflictException("Session timeout cannot be negative");
+        if (request.IdleTimeoutSeconds.HasValue && request.IdleTimeoutSeconds.Value < 0)
+            throw new ConflictException("Idle timeout cannot be negative");
+        if (request.BandwidthUpKbps.HasValue && request.BandwidthUpKbps.Value < 0)
+            throw new ConflictException("Upload bandwidth cannot be negative");
+        if (request.BandwidthDownKbps.HasValue && request.BandwidthDownKbps.Value < 0)
+            throw new ConflictException("Download bandwidth cannot be negative");
 
         if (request.Name != null && request.Name != plan.Name &&
             await _repo.NameExistsAsync(request.Name))
@@ -140,22 +175,12 @@ public class PlanService : IPlanService
         if (request.BandwidthDownKbps.HasValue) plan.BandwidthDownKbps = request.BandwidthDownKbps;
         if (request.SessionTimeoutSeconds.HasValue) plan.SessionTimeoutSeconds = request.SessionTimeoutSeconds.Value;
         if (request.IdleTimeoutSeconds.HasValue) plan.IdleTimeoutSeconds = request.IdleTimeoutSeconds.Value;
-        if (request.MaxDevices.HasValue) plan.MaxDevices = request.MaxDevices.Value;
+        plan.MaxDevices = maxDevices;
         if (request.SortOrder.HasValue) plan.SortOrder = request.SortOrder.Value;
+        if (request.IsActive.HasValue) plan.IsActive = request.IsActive.Value;
 
-        await _repo.UpdateAsync(plan);
+        await _repo.UpdatePlanWithPolicyAsync(plan);
 
-        // Re-sync QoS if relevant fields changed
-        if (request.RadiusGroupId.HasValue || request.BandwidthUpKbps.HasValue ||
-            request.BandwidthDownKbps.HasValue || request.SessionTimeoutSeconds.HasValue ||
-            request.IdleTimeoutSeconds.HasValue)
-        {
-            await SyncQos(plan);
-        }
-
-        var groupName = await _repo.GetGroupNameAsync(plan.RadiusGroupId) ?? "";
-
-        _log.LogInformation("Plan {PlanId} updated successfully", id);
         return new PlanSummaryResponse
         {
             Id = plan.Id,
@@ -171,7 +196,7 @@ public class PlanService : IPlanService
 
     public async Task DeleteAsync(int id)
     {
-        _log.LogInformation("Processing soft-delete for plan ID {PlanId}", id);
+        _log.LogDebug("Processing hard-delete and RADIUS policy removal for plan ID {PlanId}", id);
         var plan = await _repo.GetByIdAsync(id);
         if (plan == null)
         {
@@ -179,13 +204,12 @@ public class PlanService : IPlanService
             throw new NotFoundException($"Plan with ID {id} not found");
         }
 
-        plan.IsActive = false;
-        await _repo.UpdateAsync(plan);
-        _log.LogInformation("Plan {PlanId} deactivated", id);
+        await _repo.DeleteAsync(plan);
     }
 
     private async Task SyncQos(RadiusPackage plan)
     {
-        await _repo.SyncGroupQosAsync(plan);
+        await _repo.SyncGroupPolicyAsync(plan);
     }
 }
+    

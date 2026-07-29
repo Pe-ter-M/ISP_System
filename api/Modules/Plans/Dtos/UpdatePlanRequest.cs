@@ -11,5 +11,6 @@ public record UpdatePlanRequest(
     int? SessionTimeoutSeconds,
     int? IdleTimeoutSeconds,
     int? MaxDevices,
-    int? SortOrder
+    int? SortOrder,
+    bool? IsActive
 );
