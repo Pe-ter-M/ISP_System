@@ -119,7 +119,6 @@ public class PlanService : IPlanService
         {
             Name = request.Name,
             Description = request.Description,
-            RadiusGroupId = request.RadiusGroupId,
             PriceCents = request.PriceCents,
             BillingCycle = request.BillingCycle ?? "monthly",
             BandwidthUpKbps = request.BandwidthUpKbps,
@@ -188,7 +187,6 @@ public class PlanService : IPlanService
 
         if (request.Name != null) plan.Name = request.Name;
         if (request.Description != null) plan.Description = request.Description;
-        if (request.RadiusGroupId.HasValue) plan.RadiusGroupId = request.RadiusGroupId.Value;
         if (request.PriceCents.HasValue) plan.PriceCents = request.PriceCents.Value;
         if (request.BillingCycle != null) plan.BillingCycle = request.BillingCycle;
         if (request.BandwidthUpKbps.HasValue) plan.BandwidthUpKbps = request.BandwidthUpKbps;

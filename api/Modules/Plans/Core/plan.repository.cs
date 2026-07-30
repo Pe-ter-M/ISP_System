@@ -45,9 +45,42 @@ public class PlanRepository : IPlanRepository
     public async Task<RadiusPackage> CreateAsync(RadiusPackage plan)
     {
         _log.LogDebug("Creating plan {Name} with price {Price}", plan.Name, plan.PriceCents);
+        
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        // 1. Automatically generate the group name from the plan's speed/name characteristics
+        // Consistent format: e.g. "Plan-MyPlanName-Group" or clean slug
+        var cleanPlanName = plan.Name.Replace(" ", "").Replace("-", "");
+        var generatedGroupName = $"{cleanPlanName}-Group";
+
+        // 2. Insert or fetch matching active RadiusGroup entry into radius_groups
+        var targetGroup = await _db.RadiusGroups
+            .FirstOrDefaultAsync(g => g.GroupName == generatedGroupName);
+
+        if (targetGroup == null)
+        {
+            _log.LogDebug("Auto-creating group {Group} for plan {Plan}", generatedGroupName, plan.Name);
+            targetGroup = new RadiusGroup
+            {
+                GroupName = generatedGroupName,
+                Description = $"Auto-generated group for plan: {plan.Name}",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.RadiusGroups.Add(targetGroup);
+            await _db.SaveChangesAsync();
+        }
+
+        // 3. Link the auto-resolved group ID to our new package plan
+        plan.RadiusGroupId = targetGroup.Id;
+
+        // 4. Save the package plan itself
         _db.RadiusPackages.Add(plan);
         await _db.SaveChangesAsync();
-        _log.LogDebug("Plan created with ID {PlanId}: {Name}", plan.Id, plan.Name);
+
+        await tx.CommitAsync();
+
+        _log.LogDebug("Plan created with ID {PlanId}: {Name} linked to RadiusGroup [{GroupId}: {Group}]", plan.Id, plan.Name, plan.RadiusGroupId, generatedGroupName);
         return plan;
     }
 
@@ -244,15 +277,14 @@ public class PlanRepository : IPlanRepository
         _db.RadiusPackages.Remove(plan);
         await _db.SaveChangesAsync();
 
-        // 2. Resolve the RADIUS group name
-        var groupName = await _db.RadiusGroups
-            .Where(g => g.Id == plan.RadiusGroupId)
-            .Select(g => g.GroupName)
-            .FirstOrDefaultAsync();
+        // 2. Resolve the RADIUS group
+        var targetGroup = await _db.RadiusGroups
+            .FirstOrDefaultAsync(g => g.Id == plan.RadiusGroupId);
 
-        if (!string.IsNullOrEmpty(groupName))
+        if (targetGroup != null)
         {
-            _log.LogDebug("Plan deletion: syncing RADIUS policy removal for group {Group}", groupName);
+            var groupName = targetGroup.GroupName;
+            _log.LogDebug("Plan deletion: syncing RADIUS policy removal and deleting group {Group}", groupName);
 
             // 3. Delete group replies using strongly-typed entities
             var replies = await _db.Set<RadGroupReply>()
@@ -266,6 +298,9 @@ public class PlanRepository : IPlanRepository
                 .ToListAsync();
             _db.Set<RadGroupCheck>().RemoveRange(checks);
 
+            // 5. Delete the radius group itself
+            _db.RadiusGroups.Remove(targetGroup);
+
             await _db.SaveChangesAsync();
         }
         else
@@ -274,7 +309,7 @@ public class PlanRepository : IPlanRepository
         }
 
         await tx.CommitAsync();
-        _log.LogDebug("Plan {PlanId} and its associated RADIUS policy for group {Group} deleted atomically", plan.Id, groupName ?? "Unknown");
+        _log.LogDebug("Plan {PlanId} and its associated RADIUS group and policies deleted atomically", plan.Id);
     }
 
     public async Task<int> GetActiveSubscribersCountAsync(int planId)

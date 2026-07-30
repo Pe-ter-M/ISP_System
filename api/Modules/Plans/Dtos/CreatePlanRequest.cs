@@ -3,7 +3,6 @@ namespace InternetProvider.Api.Modules.Plans.Dtos;
 public record CreatePlanRequest(
     string Name,
     string? Description,
-    int RadiusGroupId,
     int PriceCents,
     string? BillingCycle,
     int? BandwidthUpKbps,
