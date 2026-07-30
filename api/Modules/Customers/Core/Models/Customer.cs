@@ -40,6 +40,12 @@ public class Customer
     [Column("gps_lng")]
     public double? GpsLng { get; set; }
 
+    [Column("username_ppoe")]
+    public string UsernamePpoe { get; set; } = string.Empty;
+
+    [Column("password_ppoe")]
+    public string PasswordPpoe { get; set; } = string.Empty;
+
     [Column("status")]
     public string Status { get; set; } = "active";
 

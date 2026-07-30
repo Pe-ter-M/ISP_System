@@ -18,6 +18,9 @@ using InternetProvider.Api.Modules.Customers.Interfaces;
 using InternetProvider.Api.Modules.Customers.Core;
 using InternetProvider.Api.Modules.Nas.Interfaces;
 using InternetProvider.Api.Modules.Nas.Core;
+using InternetProvider.Api.Modules.Payments.Interfaces;
+using InternetProvider.Api.Modules.Payments.Core.Gateways;
+using InternetProvider.Api.Modules.Payments.Services;
 using InternetProvider.Api.Services;
 
 // ── Serilog bootstrap (catches startup errors before config loads) ──
@@ -71,6 +74,10 @@ try
     // ── NAS services ─────────────────────────────────────────────────
     builder.Services.AddScoped<INasRepository, NasRepository>();
     builder.Services.AddScoped<INasService, NasService>();
+
+    // ── Payment Infrastructure services ──────────────────────────────
+    builder.Services.AddScoped<IPaymentGateway, MockPaymentGateway>();
+    builder.Services.AddScoped<PaymentGatewayResolver>();
 
     builder.Services.AddOpenApi(options =>
 {

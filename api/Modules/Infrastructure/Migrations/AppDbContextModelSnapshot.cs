@@ -65,6 +65,11 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("notes");
 
+                    b.Property<string>("PasswordPpoe")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("password_ppoe");
+
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasColumnType("text")
@@ -90,6 +95,11 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("integer")
                         .HasColumnName("user_id");
+
+                    b.Property<string>("UsernamePpoe")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("username_ppoe");
 
                     b.HasKey("Id");
 
@@ -232,6 +242,63 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("organization");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Payments.Core.Models.Payment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AmountCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("amount_cents");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payment_method");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("phone_number");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("reference_number");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<int>("SubscriptionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("subscription_id");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("payments");
                 });
 
             modelBuilder.Entity("InternetProvider.Api.Modules.Plans.Core.Models.RadiusGroup", b =>

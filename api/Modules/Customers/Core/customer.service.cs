@@ -60,6 +60,8 @@ public class CustomerService : ICustomerService
             Region = c.Region,
             GpsLat = c.GpsLat,
             GpsLng = c.GpsLng,
+            UsernamePpoe = c.UsernamePpoe,
+            PasswordPpoe = c.PasswordPpoe,
             Status = c.Status,
             Notes = c.Notes,
             CreatedAt = c.CreatedAt,
@@ -103,6 +105,12 @@ public class CustomerService : ICustomerService
         // Create customer record
         var code = await _repo.GenerateCustomerCodeAsync();
         var now = DateTime.UtcNow;
+
+        // Auto-generate clean, unique PPPoE credentials
+        // format: code_ppoe (e.g., phm0015_ppoe) and random 8 character secure password
+        var generatedUsername = $"{code.ToLower().Replace("-", "")}_ppoe";
+        var generatedPassword = Guid.NewGuid().ToString()[..8].ToLower();
+
         var customer = new Models.Customer
         {
             UserId = user.Id,
@@ -113,13 +121,15 @@ public class CustomerService : ICustomerService
             ServiceAddress = request.ServiceAddress,
             City = request.City,
             Region = request.Region,
+            UsernamePpoe = generatedUsername,
+            PasswordPpoe = generatedPassword,
             Status = "active",
             CreatedAt = now,
             UpdatedAt = now,
         };
 
         var created = await _repo.CreateAsync(customer);
-        _log.LogInformation("Customer created: {Code} — {Name}", code, request.FullName);
+        _log.LogInformation("Customer created: {Code} — {Name} with auto-generated PPPoE credentials: {PpoeUser}", code, request.FullName, generatedUsername);
 
         return new CustomerSummaryResponse
         {
@@ -133,6 +143,8 @@ public class CustomerService : ICustomerService
             Phone = created.Phone,
             City = created.City,
             Region = created.Region,
+            UsernamePpoe = created.UsernamePpoe,
+            PasswordPpoe = created.PasswordPpoe,
             Status = created.Status,
             CreatedAt = created.CreatedAt,
         };
@@ -153,6 +165,8 @@ public class CustomerService : ICustomerService
             Phone = c.Phone,
             City = c.City,
             Region = c.Region,
+            UsernamePpoe = c.UsernamePpoe,
+            PasswordPpoe = c.PasswordPpoe,
             Status = c.Status,
             CreatedAt = c.CreatedAt,
         };
