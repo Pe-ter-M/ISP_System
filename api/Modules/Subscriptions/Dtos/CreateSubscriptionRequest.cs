@@ -1,3 +1,5 @@
+using InternetProvider.Api.Modules.Payments.Core;
+
 namespace InternetProvider.Api.Modules.Subscriptions.Dtos;
 
 public record CreateSubscriptionRequest(
@@ -8,7 +10,7 @@ public record CreateSubscriptionRequest(
     bool? AutoRenew,
     
     // ── Payment Dynamic Parameters ──
-    string PaymentMethod,     // e.g. "Mock", "Mpesa", "Airtel" (dynamic billing choice)
-    string PhoneNumber,      // The cellular billing line
-    string? ReferenceNotes   // Optional details or client message
+    PaymentMethod PaymentMethod, // Enum constraint to avoid case-sensitivity issues
+    string PhoneNumber,          // The cellular billing line
+    string? ReferenceNotes       // Optional details or client message
 );

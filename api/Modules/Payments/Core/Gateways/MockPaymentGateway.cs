@@ -1,4 +1,5 @@
 using InternetProvider.Api.Modules.Payments.Interfaces;
+using InternetProvider.Api.Modules.Payments.Core;
 
 namespace InternetProvider.Api.Modules.Payments.Core.Gateways;
 
@@ -11,7 +12,7 @@ public class MockPaymentGateway : IPaymentGateway
         _log = log;
     }
 
-    public string ProviderName => "Mock";
+    public PaymentMethod Provider => PaymentMethod.Mock;
 
     public async Task<PaymentResult> ProcessPaymentAsync(int amountCents, string phoneNumber, string reference)
     {

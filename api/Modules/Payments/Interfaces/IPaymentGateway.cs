@@ -1,8 +1,10 @@
+using InternetProvider.Api.Modules.Payments.Core;
+
 namespace InternetProvider.Api.Modules.Payments.Interfaces;
 
 public interface IPaymentGateway
 {
-    string ProviderName { get; } // "Mock", "Mpesa", "Airtel" etc.
+    PaymentMethod Provider { get; } // Enum constraint
 
     Task<PaymentResult> ProcessPaymentAsync(int amountCents, string phoneNumber, string reference);
 }

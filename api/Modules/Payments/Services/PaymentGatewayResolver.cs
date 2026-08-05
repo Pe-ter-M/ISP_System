@@ -1,4 +1,5 @@
 using InternetProvider.Api.Modules.Payments.Interfaces;
+using InternetProvider.Api.Modules.Payments.Core;
 
 namespace InternetProvider.Api.Modules.Payments.Services;
 
@@ -13,18 +14,18 @@ public class PaymentGatewayResolver
         _log = log;
     }
 
-    public IPaymentGateway GetGateway(string provider)
+    public IPaymentGateway GetGateway(PaymentMethod provider)
     {
-        _log.LogDebug("Resolving payment gateway for provider: '{Provider}'", provider);
+        _log.LogDebug("Resolving payment gateway for provider enum value: '{Provider}'", provider);
         
-        var gateway = _gateways.FirstOrDefault(g => g.ProviderName.Equals(provider, StringComparison.OrdinalIgnoreCase));
+        var gateway = _gateways.FirstOrDefault(g => g.Provider == provider);
         if (gateway == null)
         {
-            _log.LogError("Unsupported payment provider requested: '{Provider}'", provider);
+            _log.LogError("Unsupported payment provider enum requested: '{Provider}'", provider);
             throw new NotSupportedException($"Payment provider '{provider}' is not supported in this environment configuration.");
         }
 
-        _log.LogDebug("Successfully matched provider: {Provider}", gateway.ProviderName);
+        _log.LogDebug("Successfully matched provider gateway: {Provider}", gateway.Provider);
         return gateway;
     }
 }

@@ -18,6 +18,8 @@ using InternetProvider.Api.Modules.Customers.Interfaces;
 using InternetProvider.Api.Modules.Customers.Core;
 using InternetProvider.Api.Modules.Nas.Interfaces;
 using InternetProvider.Api.Modules.Nas.Core;
+using InternetProvider.Api.Modules.Subscriptions.Interfaces;
+using InternetProvider.Api.Modules.Subscriptions.Core;
 using InternetProvider.Api.Modules.Payments.Interfaces;
 using InternetProvider.Api.Modules.Payments.Core.Gateways;
 using InternetProvider.Api.Modules.Payments.Services;
@@ -75,8 +77,14 @@ try
     builder.Services.AddScoped<INasRepository, NasRepository>();
     builder.Services.AddScoped<INasService, NasService>();
 
+    // ── Subscription services ─────────────────────────────────────────
+    builder.Services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+    builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+
     // ── Payment Infrastructure services ──────────────────────────────
     builder.Services.AddScoped<IPaymentGateway, MockPaymentGateway>();
+    builder.Services.AddScoped<IPaymentGateway, MpesaMockPaymentGateway>();
+    builder.Services.AddScoped<IPaymentGateway, AirtelMoneyMockPaymentGateway>();
     builder.Services.AddScoped<PaymentGatewayResolver>();
 
     builder.Services.AddOpenApi(options =>
