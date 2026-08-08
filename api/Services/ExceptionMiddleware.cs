@@ -30,6 +30,14 @@ public class ExceptionMiddleware
             await JsonSerializer.SerializeAsync(context.Response.Body,
                 ApiResponse.Error(ex.Message, 404));
         }
+        catch (BadRequestException ex)
+        {
+            _log.LogWarning("Bad request format: {Message}", ex.Message);
+            context.Response.StatusCode = 400;
+            context.Response.ContentType = "application/json";
+            await JsonSerializer.SerializeAsync(context.Response.Body,
+                ApiResponse.Error(ex.Message, 400));
+        }
         catch (ConflictException ex)
         {
             _log.LogWarning("Conflict: {Message}", ex.Message);

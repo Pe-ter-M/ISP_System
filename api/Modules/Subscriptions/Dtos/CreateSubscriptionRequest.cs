@@ -5,8 +5,6 @@ namespace InternetProvider.Api.Modules.Subscriptions.Dtos;
 public record CreateSubscriptionRequest(
     int CustomerId,
     int PackageId,
-    string Username,
-    string Password,
     bool? AutoRenew,
     
     // ── Payment Dynamic Parameters ──

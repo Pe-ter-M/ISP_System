@@ -124,7 +124,17 @@ public class SubscriptionService : ISubscriptionService
 
     public async Task<SubscriptionResponse> CreateAsync(CreateSubscriptionRequest request)
     {
+        if (request == null)
+            throw new BadRequestException("Request body cannot be null. Please provide required subscription and billing attributes.");
+
         _log.LogInformation("Creating subscription service pipeline for customer {Id}", request.CustomerId);
+
+        if (request.CustomerId <= 0)
+            throw new BadRequestException("A valid positive CustomerId is required to start a subscription");
+        if (request.PackageId <= 0)
+            throw new BadRequestException("A valid positive PackageId is required to choose a speed plan");
+        if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+            throw new BadRequestException("Mobile number is required for transaction STK requests");
 
         // 1. Validate customer exists and is active
         var customer = await _db.Customers.FindAsync(request.CustomerId);
@@ -192,7 +202,7 @@ public class SubscriptionService : ISubscriptionService
             created.Id,
             created.CustomerId,
             created.PackageId,
-            created.Username,
+            customer.UsernamePpoe,
             created.Status,
             created.CurrentPeriodStart,
             created.CurrentPeriodEnd,

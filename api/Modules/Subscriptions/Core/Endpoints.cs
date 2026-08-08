@@ -66,6 +66,50 @@ public static class SubscriptionEndpoints
         })
         .RequirePermission(Permissions.SubscriptionsView);
 
+        // ── POST: Logged-in Customer creates/pays their own subscription ──
+        // Overrides or injects CustomerId securely from their JWT claims token to prevent spoofing
+        group.MapPost("/my", async (
+            CreateMySubscriptionRequest req, 
+            HttpContext context, 
+            ISubscriptionService service, 
+            AppDbContext db,
+            ILogger<LoggerMarker> log) =>
+        {
+            var principal = context.Items["User"] as ClaimsPrincipal;
+            if (principal == null)
+                return Results.Unauthorized();
+
+            var claimUserId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                ?? principal.FindFirst("sub")?.Value;
+
+            if (string.IsNullOrEmpty(claimUserId) || !int.TryParse(claimUserId, out var userId))
+            {
+                return Results.BadRequest(ApiResponse.Error("Malformed token claims payload").ToResult());
+            }
+
+            log.LogInformation("Customer POST /api/subscriptions/my called for User ID {UserId}", userId);
+
+            var customer = await db.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
+            if (customer == null)
+            {
+                log.LogWarning("Subscriber context missing for authenticated user {UserId}", userId);
+                return Results.NotFound(ApiResponse.Error("Customer profile record not found for this user account").ToResult());
+            }
+
+            // Convert securely to standard CreateSubscriptionRequest with customer's locked CustomerId
+            var standardReq = new CreateSubscriptionRequest(
+                customer.Id,
+                req.PackageId,
+                req.AutoRenew,
+                req.PaymentMethod,
+                req.PhoneNumber,
+                req.ReferenceNotes
+            );
+
+            var item = await service.CreateAsync(standardReq);
+            return ApiResponse.Success(item, "Your subscription has been successfully purchased and set up").ToResult();
+        });
+
         // ── POST: Dynamic Purchase and Setup Subscription ──
         group.MapPost("/", async (CreateSubscriptionRequest req, ISubscriptionService service, ILogger<LoggerMarker> log) =>
         {
@@ -75,10 +119,10 @@ public static class SubscriptionEndpoints
         })
         .RequirePermission(Permissions.SubscriptionsCreate);
 
-        // ── PUT: Modify Subscription Settings / Status / Package ──
-        group.MapPut("/{id:int}", async (int id, UpdateSubscriptionRequest req, ISubscriptionService service, ILogger<LoggerMarker> log) =>
+        // ── PATCH: Modify Subscription Attributes (Partial updates) ──
+        group.MapPatch("/{id:int}", async (int id, UpdateSubscriptionRequest req, ISubscriptionService service, ILogger<LoggerMarker> log) =>
         {
-            log.LogInformation("PUT /api/subscriptions/{Id} called", id);
+            log.LogInformation("PATCH /api/subscriptions/{Id} called", id);
             var item = await service.UpdateAsync(id, req);
             return ApiResponse.Success(item, "Subscription updated successfully and synchronized to FreeRADIUS").ToResult();
         })

@@ -102,7 +102,8 @@ public class SubscriptionRepository : ISubscriptionRepository
         catch (Exception ex)
         {
             await tx.RollbackAsync();
-            _log.LogError(ex, "Failed to complete subscription creation safely. Rolled back state.");
+            // _log.LogError(ex, "Failed to complete subscription creation safely. Rolled back state.");
+            _log.LogError(ex,"Subscription creation failed. Message: {Message}, Inner: {InnerMessage}",ex.Message,ex.InnerException?.Message);
             throw;
         }
     }
