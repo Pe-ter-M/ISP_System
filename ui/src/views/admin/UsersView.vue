@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { getUsers, createUser, getUserById } from '@/services/user.service'
+import { getUsers, createUser, getUserById, getPermissions, updateUserPermissions } from '@/services/user.service'
 import { useThemeStore } from '@/stores/theme.store'
-import type { UserDetail } from '@/types/user.types'
+import type { UserDetail, Permission } from '@/types/user.types'
 import type { CreateUserPayload } from '@/services/user.service'
 
 const theme = useThemeStore()
@@ -27,6 +27,16 @@ const showCreateModal = ref(false)
 const showDetailModal = ref(false)
 const detailLoading = ref(false)
 const selectedUser = ref<UserDetail | null>(null)
+
+// All permissions cached on page load, released on navigation
+const allPermissions = ref<Permission[]>([])
+
+// Permission edit mode state
+const editMode = ref(false)
+const pendingOverrides = ref<Record<string, boolean>>({})
+const saveLoading = ref(false)
+const saveError = ref('')
+const saveSuccess = ref(false)
 
 // Create form
 const createForm = ref<CreateUserPayload>({
@@ -60,7 +70,10 @@ async function fetchUsers() {
   }
 }
 
-onMounted(fetchUsers)
+onMounted(() => {
+  fetchUsers()
+  getPermissions().then(data => { allPermissions.value = data }).catch(() => {})
+})
 
 // ── Search with debounce ──
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -179,6 +192,102 @@ async function openDetail(id: number) {
 function closeDetail() {
   showDetailModal.value = false
   selectedUser.value = null
+  editMode.value = false
+  pendingOverrides.value = {}
+  saveError.value = ''
+  saveSuccess.value = false
+}
+
+// Permissions from the user's role (whether currently active or revoked via override)
+const roleBasePerms = computed((): Set<string> => {
+  if (!selectedUser.value) return new Set()
+  const overrideMap = new Map(
+    selectedUser.value.permissionOverrides?.map(o => [o.code, o.isGranted]) ?? [],
+  )
+  const perms = new Set<string>()
+  for (const p of selectedUser.value.permissions ?? []) {
+    if (overrideMap.get(p) !== true) perms.add(p) // not an extra grant → from role
+  }
+  for (const [code, granted] of overrideMap) {
+    if (!granted) perms.add(code) // revoked from role, still belongs to role
+  }
+  return perms
+})
+
+// All available permissions grouped by their group field
+const groupedAllPermissions = computed(() => {
+  const groups: Record<string, Permission[]> = {}
+  for (const p of allPermissions.value) {
+    const bucket = groups[p.group] ?? (groups[p.group] = [])
+    bucket.push(p)
+  }
+  return groups
+})
+
+// Effective state of a single permission code in edit mode
+function permState(code: string): 'role-active' | 'role-revoked' | 'extra-granted' | 'unavailable' {
+  if (code in pendingOverrides.value) {
+    return pendingOverrides.value[code] ? 'extra-granted' : 'role-revoked'
+  }
+  return roleBasePerms.value.has(code) ? 'role-active' : 'unavailable'
+}
+
+function togglePermission(code: string) {
+  const state = permState(code)
+  const updates = { ...pendingOverrides.value }
+  if (state === 'role-active') {
+    updates[code] = false
+  } else if (state === 'role-revoked' || state === 'extra-granted') {
+    delete updates[code]
+  } else {
+    updates[code] = true
+  }
+  pendingOverrides.value = updates
+}
+
+// Number of pending changes vs the original overrides
+const changesCount = computed(() => {
+  if (!selectedUser.value) return 0
+  const origMap = new Map(selectedUser.value.permissionOverrides?.map(o => [o.code, o.isGranted]) ?? [])
+  const allCodes = new Set([...Object.keys(pendingOverrides.value), ...origMap.keys()])
+  let count = 0
+  for (const code of allCodes) {
+    if (origMap.get(code) !== pendingOverrides.value[code]) count++
+  }
+  return count
+})
+
+function enterEditMode() {
+  pendingOverrides.value = Object.fromEntries(
+    selectedUser.value?.permissionOverrides?.map(o => [o.code, o.isGranted]) ?? [],
+  )
+  saveError.value = ''
+  saveSuccess.value = false
+  editMode.value = true
+}
+
+function exitEditMode() {
+  editMode.value = false
+  pendingOverrides.value = {}
+  saveError.value = ''
+}
+
+async function savePermissions() {
+  if (!selectedUser.value) return
+  saveLoading.value = true
+  saveError.value = ''
+  try {
+    const overrides = Object.entries(pendingOverrides.value).map(([code, isGranted]) => ({ code, isGranted }))
+    // PUT returns the updated user — no follow-up GET needed
+    const updated = await updateUserPermissions(selectedUser.value.id, overrides)
+    selectedUser.value = updated
+    exitEditMode()
+    saveSuccess.value = true
+  } catch (e: any) {
+    saveError.value = e?.message || e?.error || 'Failed to update permissions'
+  } finally {
+    saveLoading.value = false
+  }
 }
 
 // Group flat permission strings by their prefix (e.g. "customer.view" → "customer")
@@ -453,108 +562,238 @@ const roles = [
     <Teleport to="body">
       <div v-if="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDetail">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeDetail"></div>
-        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-modal-in">
+        <div
+          class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full animate-modal-in flex flex-col"
+          :class="editMode ? 'max-w-2xl max-h-[92vh]' : 'max-w-xl max-h-[90vh]'"
+        >
           <!-- Sticky header -->
-          <div class="sticky top-0 z-10 bg-white dark:bg-gray-900 flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-            <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">User Details</h2>
-            <button @click="closeDetail" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm">✕</button>
+          <div class="flex-shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">
+                {{ editMode ? 'Edit Permissions' : 'User Details' }}
+              </h2>
+              <p v-if="editMode && selectedUser" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                {{ selectedUser.fullName }} · {{ selectedUser.roleName }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <template v-if="editMode">
+                <span
+                  v-if="changesCount > 0"
+                  class="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                >{{ changesCount }} change{{ changesCount !== 1 ? 's' : '' }}</span>
+                <button
+                  @click="exitEditMode"
+                  class="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer"
+                >Cancel</button>
+                <button
+                  @click="savePermissions"
+                  :disabled="saveLoading || changesCount === 0"
+                  class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span v-if="saveLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  {{ saveLoading ? 'Saving…' : 'Save Changes' }}
+                </button>
+              </template>
+              <button @click="closeDetail" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm ml-1">✕</button>
+            </div>
           </div>
 
-          <div class="px-6 pb-6">
+          <!-- Scrollable body -->
+          <div class="overflow-y-auto flex-1 px-6 pb-6">
             <div v-if="detailLoading" class="flex justify-center py-10">
               <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
 
-            <div v-else-if="selectedUser" class="space-y-6 pt-4">
-              <!-- Avatar + name -->
-              <div class="flex items-center gap-4">
-                <div class="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xl font-bold text-blue-600 dark:text-blue-400 flex-shrink-0">
-                  {{ selectedUser.fullName.charAt(0).toUpperCase() }}
-                </div>
-                <div>
-                  <p class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ selectedUser.fullName }}</p>
-                  <span class="px-2 py-0.5 rounded-full text-xs font-medium mt-1 inline-block"
-                    :class="{
-                      'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': selectedUser.roleName === 'Admin',
-                      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': selectedUser.roleName === 'Secretary',
-                      'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300': selectedUser.roleName === 'Head Technician',
-                      'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': selectedUser.roleName === 'Field Technician',
-                      'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400': selectedUser.roleName === 'Customer',
-                    }"
-                  >{{ selectedUser.roleName }}</span>
-                </div>
-              </div>
+            <div v-else-if="selectedUser">
 
-              <!-- Core info rows -->
-              <div class="space-y-0 rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden text-sm">
-                <div class="flex justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50">
-                  <span class="text-gray-500 dark:text-gray-400">Email</span>
-                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.email }}</span>
+              <!-- ════ VIEW MODE ════ -->
+              <div v-if="!editMode" class="space-y-5 pt-4">
+                <!-- Success banner after a save -->
+                <div
+                  v-if="saveSuccess"
+                  class="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-sm"
+                >
+                  <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Permissions updated successfully.
                 </div>
-                <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                  <span class="text-gray-500 dark:text-gray-400">Phone</span>
-                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.phone || '—' }}</span>
-                </div>
-                <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
-                  <span class="text-gray-500 dark:text-gray-400">Status</span>
-                  <span class="font-medium flex items-center gap-1.5">
-                    <span :class="selectedUser.isActive ? 'bg-green-500' : 'bg-gray-400'" class="w-2 h-2 rounded-full inline-block"></span>
-                    <span :class="selectedUser.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">{{ selectedUser.isActive ? 'Active' : 'Inactive' }}</span>
-                  </span>
-                </div>
-                <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                  <span class="text-gray-500 dark:text-gray-400">Created</span>
-                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.createdAt).toLocaleString() }}</span>
-                </div>
-                <div v-if="selectedUser.updatedAt" class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
-                  <span class="text-gray-500 dark:text-gray-400">Last Updated</span>
-                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.updatedAt).toLocaleString() }}</span>
-                </div>
-              </div>
 
-              <!-- Permission Overrides -->
-              <div v-if="selectedUser.permissionOverrides && selectedUser.permissionOverrides.length > 0">
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Permission Overrides
-                  <span class="ml-1.5 text-xs font-normal text-gray-400">(deviations from role defaults)</span>
-                </h3>
-                <div class="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/10 divide-y divide-amber-100 dark:divide-amber-800/40">
-                  <div
-                    v-for="ov in selectedUser.permissionOverrides"
-                    :key="ov.code"
-                    class="flex items-center justify-between px-4 py-2.5 text-sm"
-                  >
-                    <span class="font-mono text-gray-700 dark:text-gray-300 text-xs">{{ ov.code }}</span>
-                    <span
-                      class="px-2 py-0.5 rounded-full text-xs font-semibold"
-                      :class="ov.isGranted
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                        : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'"
-                    >
-                      {{ ov.isGranted ? '+ Granted' : '− Revoked' }}
-                    </span>
+                <!-- Avatar + name -->
+                <div class="flex items-center gap-4">
+                  <div class="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xl font-bold text-blue-600 dark:text-blue-400 flex-shrink-0">
+                    {{ selectedUser.fullName.charAt(0).toUpperCase() }}
+                  </div>
+                  <div>
+                    <p class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ selectedUser.fullName }}</p>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium mt-1 inline-block"
+                      :class="{
+                        'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': selectedUser.roleName === 'Admin',
+                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': selectedUser.roleName === 'Secretary',
+                        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300': selectedUser.roleName === 'Head Technician',
+                        'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': selectedUser.roleName === 'Field Technician',
+                        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400': selectedUser.roleName === 'Customer',
+                      }"
+                    >{{ selectedUser.roleName }}</span>
                   </div>
                 </div>
+
+                <!-- Core info rows -->
+                <div class="rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden text-sm">
+                  <div class="flex justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50">
+                    <span class="text-gray-500 dark:text-gray-400">Email</span>
+                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.email }}</span>
+                  </div>
+                  <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
+                    <span class="text-gray-500 dark:text-gray-400">Phone</span>
+                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.phone || '—' }}</span>
+                  </div>
+                  <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                    <span class="text-gray-500 dark:text-gray-400">Status</span>
+                    <span class="font-medium flex items-center gap-1.5">
+                      <span :class="selectedUser.isActive ? 'bg-green-500' : 'bg-gray-400'" class="w-2 h-2 rounded-full"></span>
+                      <span :class="selectedUser.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">{{ selectedUser.isActive ? 'Active' : 'Inactive' }}</span>
+                    </span>
+                  </div>
+                  <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
+                    <span class="text-gray-500 dark:text-gray-400">Created</span>
+                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.createdAt).toLocaleString() }}</span>
+                  </div>
+                  <div v-if="selectedUser.updatedAt" class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                    <span class="text-gray-500 dark:text-gray-400">Last Updated</span>
+                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.updatedAt).toLocaleString() }}</span>
+                  </div>
+                </div>
+
+                <!-- Permission Overrides -->
+                <div v-if="selectedUser.permissionOverrides && selectedUser.permissionOverrides.length > 0">
+                  <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Permission Overrides
+                    <span class="ml-1.5 text-xs font-normal text-gray-400">deviations from role defaults</span>
+                  </h3>
+                  <div class="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/10 divide-y divide-amber-100 dark:divide-amber-800/40">
+                    <div
+                      v-for="ov in selectedUser.permissionOverrides"
+                      :key="ov.code"
+                      class="flex items-center justify-between px-4 py-2.5 text-sm"
+                    >
+                      <span class="font-mono text-gray-700 dark:text-gray-300 text-xs">{{ ov.code }}</span>
+                      <span class="px-2 py-0.5 rounded-full text-xs font-semibold"
+                        :class="ov.isGranted
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                          : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'"
+                      >{{ ov.isGranted ? '+ Granted' : '− Revoked' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Effective Permissions -->
+                <div v-if="selectedUser.permissions && selectedUser.permissions.length > 0">
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Effective Permissions
+                      <span class="ml-1.5 text-xs font-normal text-gray-400">{{ selectedUser.permissions.length }} total</span>
+                    </h3>
+                    <button
+                      v-if="allPermissions.length > 0"
+                      @click="enterEditMode"
+                      class="text-xs font-medium px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 transition cursor-pointer"
+                    >Edit Permissions</button>
+                  </div>
+                  <div class="space-y-3">
+                    <div v-for="(perms, group) in groupedPermissions" :key="group">
+                      <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">{{ group }}</p>
+                      <div class="flex flex-wrap gap-1.5">
+                        <span
+                          v-for="perm in perms"
+                          :key="perm"
+                          class="px-2 py-0.5 rounded-full text-xs font-mono border"
+                          :class="selectedUser.permissionOverrides?.some(o => o.code === perm && o.isGranted)
+                            ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'"
+                        >{{ perm.split('.')[1] }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Edit button fallback (if no permissions section shown) -->
+                <div v-else-if="allPermissions.length > 0" class="pt-1">
+                  <button
+                    @click="enterEditMode"
+                    class="w-full py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition cursor-pointer"
+                  >Edit Permissions</button>
+                </div>
               </div>
 
-              <!-- Permissions grouped by category -->
-              <div v-if="selectedUser.permissions && selectedUser.permissions.length > 0">
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                  Effective Permissions
-                  <span class="ml-1.5 text-xs font-normal text-gray-400">({{ selectedUser.permissions.length }} total)</span>
-                </h3>
-                <div class="space-y-3">
-                  <div v-for="(perms, group) in groupedPermissions" :key="group">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">{{ group }}</p>
+              <!-- ════ EDIT MODE ════ -->
+              <div v-else class="space-y-5 pt-4">
+                <!-- Legend -->
+                <div class="rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 px-4 py-3">
+                  <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Legend — click any permission to toggle</p>
+                  <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-400 dark:bg-green-500"></span>Role permission (click to revoke)</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400 dark:bg-red-500"></span>Revoked — click to restore</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 dark:bg-amber-500"></span>Extra grant — click to remove</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>Not granted — click to add</span>
+                  </div>
+                </div>
+
+                <!-- Permission grid -->
+                <div class="space-y-4">
+                  <div v-for="(perms, group) in groupedAllPermissions" :key="group">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{{ group }}</p>
                     <div class="flex flex-wrap gap-1.5">
-                      <span
+                      <button
                         v-for="perm in perms"
-                        :key="perm"
-                        class="px-2 py-0.5 rounded-full text-xs font-mono border"
-                        :class="selectedUser.permissionOverrides?.some(o => o.code === perm && o.isGranted)
-                          ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
-                          : 'bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'"
-                      >{{ perm.split('.')[1] }}</span>
+                        :key="perm.code"
+                        @click="togglePermission(perm.code)"
+                        :title="perm.description"
+                        class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150 cursor-pointer select-none flex items-center gap-1"
+                        :class="{
+                          'bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50':
+                            permState(perm.code) === 'role-active',
+                          'bg-red-100 border-red-300 text-red-600 line-through dark:bg-red-900/30 dark:border-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50':
+                            permState(perm.code) === 'role-revoked',
+                          'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-600 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50':
+                            permState(perm.code) === 'extra-granted',
+                          'bg-transparent border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300':
+                            permState(perm.code) === 'unavailable',
+                        }"
+                      >
+                        <span class="opacity-80 text-[10px] leading-none">{{
+                          permState(perm.code) === 'role-active' ? '✓' :
+                          permState(perm.code) === 'role-revoked' ? '✗' :
+                          permState(perm.code) === 'extra-granted' ? '✦' : '+'
+                        }}</span>
+                        {{ perm.code.split('.')[1] }}
+                      </button>
                     </div>
+                  </div>
+                </div>
+
+                <!-- Save error -->
+                <p v-if="saveError" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-4 py-3 border border-red-200 dark:border-red-800">
+                  {{ saveError }}
+                </p>
+
+                <!-- Bottom action bar -->
+                <div class="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800">
+                  <p class="text-xs text-gray-400 dark:text-gray-500">
+                    <span v-if="changesCount === 0">No changes yet</span>
+                    <span v-else class="text-blue-600 dark:text-blue-400 font-medium">{{ changesCount }} pending change{{ changesCount !== 1 ? 's' : '' }}</span>
+                  </p>
+                  <div class="flex gap-2">
+                    <button @click="exitEditMode"
+                      class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">
+                      Cancel
+                    </button>
+                    <button @click="savePermissions" :disabled="saveLoading || changesCount === 0"
+                      class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition flex items-center gap-1.5 cursor-pointer">
+                      <span v-if="saveLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      {{ saveLoading ? 'Saving…' : 'Save Changes' }}
+                    </button>
                   </div>
                 </div>
               </div>

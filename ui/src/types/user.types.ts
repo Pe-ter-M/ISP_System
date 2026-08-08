@@ -1,3 +1,10 @@
+export interface Permission {
+  id: number
+  code: string
+  group: string
+  description: string
+}
+
 export interface PermissionOverride {
   code: string
   isGranted: boolean
