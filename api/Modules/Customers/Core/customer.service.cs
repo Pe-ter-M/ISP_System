@@ -90,7 +90,8 @@ public class CustomerService : ICustomerService
         var customerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.Of(SystemRole.Customer))
             ?? throw new InvalidOperationException("Customer role not found — run database seeder first");
 
-        // Create user first
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
         var user = new User
         {
             Email = request.Email,
@@ -103,9 +104,8 @@ public class CustomerService : ICustomerService
             UpdatedAt = DateTime.UtcNow,
         };
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(); // flush to get user.Id; not committed yet
 
-        // Create customer record
         var code = await _repo.GenerateCustomerCodeAsync();
         var now = DateTime.UtcNow;
 
@@ -130,25 +130,27 @@ public class CustomerService : ICustomerService
             Status = "active",
             UpdatedAt = now,
         };
+        _db.Customers.Add(customer);
+        await _db.SaveChangesAsync(); // flush customer; not committed yet
 
-        var created = await _repo.CreateAsync(customer);
+        await tx.CommitAsync(); // both user and customer written atomically
         _log.LogInformation("Customer created: {Code} — {Name} with auto-generated PPPoE credentials: {PpoeUser}", code, request.FullName, generatedUsernamePPOE);
 
         return new CustomerSummaryResponse
         {
-            Id = created.Id,
-            UserId = created.UserId,
-            CustomerCode = created.CustomerCode,
+            Id = customer.Id,
+            UserId = customer.UserId,
+            CustomerCode = customer.CustomerCode,
             FullName = user.FullName,
-            BusinessName = created.BusinessName,
-            CustomerType = created.CustomerType,
+            BusinessName = customer.BusinessName,
+            CustomerType = customer.CustomerType,
             Email = user.Email,
             Phone = user.Phone ?? string.Empty,
-            City = created.City,
-            Region = created.Region,
-            UsernamePpoe = created.UsernamePpoe,
-            PasswordPpoe = created.PasswordPpoe,
-            Status = created.Status,
+            City = customer.City,
+            Region = customer.Region,
+            UsernamePpoe = customer.UsernamePpoe,
+            PasswordPpoe = customer.PasswordPpoe,
+            Status = customer.Status,
             CreatedAt = user.CreatedAt,
         };
     }
@@ -167,6 +169,8 @@ public class CustomerService : ICustomerService
             Phone = c.User!.Phone ?? string.Empty,
             City = c.City,
             Region = c.Region,
+            GpsLat = c.GpsLat,
+            GpsLng = c.GpsLng,
             UsernamePpoe = c.UsernamePpoe,
             PasswordPpoe = c.PasswordPpoe,
             Status = c.Status,

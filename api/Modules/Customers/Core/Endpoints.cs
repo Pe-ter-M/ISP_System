@@ -31,15 +31,8 @@ public static class CustomerEndpoints
         group.MapGet("/{id:int}", async (int id, ICustomerService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/customers/{CustomerId}", id);
-            try
-            {
-                var customer = await service.GetByIdAsync(id);
-                return ApiResponse.Success(customer, "Customer found").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                return ApiResponse.Error("Customer not found", 404).ToResult();
-            }
+            var customer = await service.GetByIdAsync(id);
+            return ApiResponse.Success(customer, "Customer found").ToResult();
         })
         .RequirePermission(Permissions.CustomersView);
 

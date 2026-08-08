@@ -14,6 +14,8 @@ public class CustomerSummaryResponse
     public string Phone { get; set; } = string.Empty;
     public string? City { get; set; }
     public string? Region { get; set; }
+    public double? GpsLat { get; set; }
+    public double? GpsLng { get; set; }
     public string UsernamePpoe { get; set; } = string.Empty;
     public string PasswordPpoe { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
