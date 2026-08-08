@@ -1,4 +1,4 @@
-namespace InternetProvider.Api.Modules.Nas.Dtos;
+namespace InternetProvider.Api.Common;
 
 public class PaginatedResponse<T>
 {

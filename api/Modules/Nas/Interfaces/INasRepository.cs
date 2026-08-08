@@ -1,5 +1,5 @@
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Nas.Core.Models;
-using InternetProvider.Api.Modules.Nas.Dtos;
 
 namespace InternetProvider.Api.Modules.Nas.Interfaces;
 

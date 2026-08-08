@@ -1,3 +1,4 @@
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Nas.Dtos;
 using InternetProvider.Api.Modules.Nas.Interfaces;
 using InternetProvider.Api.Modules.Nas.Core.Models;

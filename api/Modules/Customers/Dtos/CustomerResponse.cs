@@ -1,3 +1,5 @@
+using InternetProvider.Api.Common;
+
 namespace InternetProvider.Api.Modules.Customers.Dtos;
 
 public class CustomerSummaryResponse
@@ -51,15 +53,6 @@ public class CustomerSubscriptionDto
     public DateTime? CurrentPeriodEnd { get; set; }
 }
 
-public class PaginatedResponse<T>
-{
-    public List<T> Items { get; set; } = new();
-    public int TotalCount { get; set; }
-    public int Page { get; set; }
-    public int PageSize { get; set; }
-    public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
-}
-
 public record CreateCustomerRequest(
     string Email,
     string Password,
@@ -69,5 +62,7 @@ public record CreateCustomerRequest(
     string? CustomerType,
     string? ServiceAddress,
     string? City,
-    string? Region
+    string? Region,
+    double? GpsLat,
+    double? GpsLng
 );

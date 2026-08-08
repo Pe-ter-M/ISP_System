@@ -1,3 +1,4 @@
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Users.Dtos;
 
 namespace InternetProvider.Api.Modules.Users.Interfaces;

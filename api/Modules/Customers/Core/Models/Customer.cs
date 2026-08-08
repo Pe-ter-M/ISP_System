@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using InternetProvider.Api.Modules.Users.Core.Models;
 
 namespace InternetProvider.Api.Modules.Customers.Core.Models;
 
@@ -21,9 +22,6 @@ public class Customer
 
     [Column("customer_type")]
     public string CustomerType { get; set; } = "residential";
-
-    [Column("phone")]
-    public string Phone { get; set; } = string.Empty;
 
     [Column("service_address")]
     public string? ServiceAddress { get; set; }
@@ -52,9 +50,9 @@ public class Customer
     [Column("notes")]
     public string? Notes { get; set; }
 
-    [Column("created_at")]
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    [ForeignKey(nameof(UserId))]
+    public User? User { get; set; }
 }

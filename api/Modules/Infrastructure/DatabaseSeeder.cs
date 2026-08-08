@@ -29,11 +29,11 @@ public static class DatabaseSeeder
         var allPerms = db.Permissions.ToDictionary(p => p.Code, p => p.Id);
 
         // ── 2. Seed default roles ──
-        var adminRole = await EnsureRoleAsync(db, "Admin", true, "Full system access");
-        var secretaryRole = await EnsureRoleAsync(db, "Secretary", true, "Billing and customer support");
-        var headTechRole = await EnsureRoleAsync(db, "Head Technician", true, "Manages technicians and field operations");
-        var fieldTechRole = await EnsureRoleAsync(db, "Field Technician", true, "Installation and maintenance");
-        var customerRole = await EnsureRoleAsync(db, "Customer", true, "End user with portal access only");
+        var adminRole       = await EnsureRoleAsync(db, RoleNames.Of(SystemRole.Admin),           true, "Full system access");
+        var secretaryRole   = await EnsureRoleAsync(db, RoleNames.Of(SystemRole.Secretary),       true, "Billing and customer support");
+        var headTechRole    = await EnsureRoleAsync(db, RoleNames.Of(SystemRole.HeadTechnician),  true, "Manages technicians and field operations");
+        var fieldTechRole   = await EnsureRoleAsync(db, RoleNames.Of(SystemRole.FieldTechnician), true, "Installation and maintenance");
+        var customerRole    = await EnsureRoleAsync(db, RoleNames.Of(SystemRole.Customer),        true, "End user with portal access only");
 
         // ── 3. Assign permissions to roles ──
 

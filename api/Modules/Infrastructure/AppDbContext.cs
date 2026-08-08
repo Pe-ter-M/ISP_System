@@ -44,6 +44,9 @@ public class AppDbContext : DbContext
             .HasIndex(u => u.Email)
             .IsUnique();
         modelBuilder.Entity<Users.Core.Models.User>()
+            .HasIndex(u => u.Phone)
+            .IsUnique();
+        modelBuilder.Entity<Users.Core.Models.User>()
             .HasIndex(u => u.RoleId);
 
         // ── Roles ──
@@ -67,6 +70,11 @@ public class AppDbContext : DbContext
             .IsUnique();
 
         // ── Customers ──
+        modelBuilder.Entity<Customers.Core.Models.Customer>()
+            .HasOne(c => c.User)
+            .WithOne(u => u.Customer)
+            .HasForeignKey<Customers.Core.Models.Customer>(c => c.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Customers.Core.Models.Customer>()
             .HasIndex(c => c.CustomerCode)
             .IsUnique();

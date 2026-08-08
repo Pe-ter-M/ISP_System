@@ -1,3 +1,4 @@
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Customers.Dtos;
 using InternetProvider.Api.Modules.Customers.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +28,7 @@ public class CustomerService : ICustomerService
 
         return new PaginatedResponse<CustomerSummaryResponse>
         {
-            Items = result.Items.Select(x => MapSummary(x)).ToList(),
+            Items = result.Items.Select(MapSummary).ToList(),
             TotalCount = result.TotalCount,
             Page = result.Page,
             PageSize = result.PageSize,
@@ -37,24 +38,23 @@ public class CustomerService : ICustomerService
     public async Task<CustomerDetailResponse> GetByIdAsync(int id)
     {
         _log.LogDebug("Getting customer detail for ID {CustomerId}", id);
-        var result = await _repo.GetByIdAsync(id);
+        var c = await _repo.GetByIdAsync(id);
 
-        if (result == null)
+        if (c == null)
             throw new NotFoundException($"Customer with ID {id} not found");
 
         var subscriptions = await _repo.GetSubscriptionsAsync(id);
-        var c = result.Customer;
 
         return new CustomerDetailResponse
         {
             Id = c.Id,
             UserId = c.UserId,
             CustomerCode = c.CustomerCode,
-            FullName = result.FullName,
+            FullName = c.User!.FullName,
             BusinessName = c.BusinessName,
             CustomerType = c.CustomerType,
-            Email = result.Email,
-            Phone = c.Phone,
+            Email = c.User!.Email,
+            Phone = c.User!.Phone ?? string.Empty,
             ServiceAddress = c.ServiceAddress,
             City = c.City,
             Region = c.Region,
@@ -64,7 +64,7 @@ public class CustomerService : ICustomerService
             PasswordPpoe = c.PasswordPpoe,
             Status = c.Status,
             Notes = c.Notes,
-            CreatedAt = c.CreatedAt,
+            CreatedAt = c.User!.CreatedAt,
             UpdatedAt = c.UpdatedAt,
             Subscriptions = subscriptions,
         };
@@ -87,6 +87,9 @@ public class CustomerService : ICustomerService
         if (await _repo.IsPhoneTakenAsync(request.Phone))
             throw new ConflictException($"Phone '{request.Phone}' is already in use");
 
+        var customerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.Of(SystemRole.Customer))
+            ?? throw new InvalidOperationException("Customer role not found — run database seeder first");
+
         // Create user first
         var user = new User
         {
@@ -94,7 +97,7 @@ public class CustomerService : ICustomerService
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             FullName = request.FullName,
             Phone = request.Phone,
-            RoleId = 2, // Customer role
+            RoleId = customerRole.Id,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
@@ -108,8 +111,8 @@ public class CustomerService : ICustomerService
 
         // Auto-generate clean, unique PPPoE credentials
         // format: code_ppoe (e.g., phm0015_ppoe) and random 8 character secure password
-        var generatedUsername = $"{code.ToLower().Replace("-", "")}_ppoe";
-        var generatedPassword = Guid.NewGuid().ToString()[..8].ToLower();
+        var generatedUsernamePPOE = $"{code.ToLower().Replace("-", "")}_ppoe";
+        var generatedPasswordPPOE = Guid.NewGuid().ToString()[..8].ToLower();
 
         var customer = new Models.Customer
         {
@@ -117,19 +120,19 @@ public class CustomerService : ICustomerService
             CustomerCode = code,
             BusinessName = request.BusinessName,
             CustomerType = request.CustomerType ?? "residential",
-            Phone = request.Phone,
             ServiceAddress = request.ServiceAddress,
             City = request.City,
             Region = request.Region,
-            UsernamePpoe = generatedUsername,
-            PasswordPpoe = generatedPassword,
+            GpsLat = request.GpsLat,
+            GpsLng = request.GpsLng,
+            UsernamePpoe = generatedUsernamePPOE,
+            PasswordPpoe = generatedPasswordPPOE,
             Status = "active",
-            CreatedAt = now,
             UpdatedAt = now,
         };
 
         var created = await _repo.CreateAsync(customer);
-        _log.LogInformation("Customer created: {Code} — {Name} with auto-generated PPPoE credentials: {PpoeUser}", code, request.FullName, generatedUsername);
+        _log.LogInformation("Customer created: {Code} — {Name} with auto-generated PPPoE credentials: {PpoeUser}", code, request.FullName, generatedUsernamePPOE);
 
         return new CustomerSummaryResponse
         {
@@ -140,35 +143,34 @@ public class CustomerService : ICustomerService
             BusinessName = created.BusinessName,
             CustomerType = created.CustomerType,
             Email = user.Email,
-            Phone = created.Phone,
+            Phone = user.Phone ?? string.Empty,
             City = created.City,
             Region = created.Region,
             UsernamePpoe = created.UsernamePpoe,
             PasswordPpoe = created.PasswordPpoe,
             Status = created.Status,
-            CreatedAt = created.CreatedAt,
+            CreatedAt = user.CreatedAt,
         };
     }
 
-    private static CustomerSummaryResponse MapSummary(CustomerWithUser x)
+    private static CustomerSummaryResponse MapSummary(Models.Customer c)
     {
-        var c = x.Customer;
         return new CustomerSummaryResponse
         {
             Id = c.Id,
             UserId = c.UserId,
             CustomerCode = c.CustomerCode,
-            FullName = x.FullName,
+            FullName = c.User!.FullName,
             BusinessName = c.BusinessName,
             CustomerType = c.CustomerType,
-            Email = x.Email,
-            Phone = c.Phone,
+            Email = c.User!.Email,
+            Phone = c.User!.Phone ?? string.Empty,
             City = c.City,
             Region = c.Region,
             UsernamePpoe = c.UsernamePpoe,
             PasswordPpoe = c.PasswordPpoe,
             Status = c.Status,
-            CreatedAt = c.CreatedAt,
+            CreatedAt = c.User!.CreatedAt,
         };
     }
 }
