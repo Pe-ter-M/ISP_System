@@ -72,7 +72,6 @@ public static class SubscriptionEndpoints
             CreateMySubscriptionRequest req, 
             HttpContext context, 
             ISubscriptionService service, 
-            AppDbContext db,
             ILogger<LoggerMarker> log) =>
         {
             var principal = context.Items["User"] as ClaimsPrincipal;
@@ -89,24 +88,7 @@ public static class SubscriptionEndpoints
 
             log.LogInformation("Customer POST /api/subscriptions/my called for User ID {UserId}", userId);
 
-            var customer = await db.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
-            if (customer == null)
-            {
-                log.LogWarning("Subscriber context missing for authenticated user {UserId}", userId);
-                return Results.NotFound(ApiResponse.Error("Customer profile record not found for this user account").ToResult());
-            }
-
-            // Convert securely to standard CreateSubscriptionRequest with customer's locked CustomerId
-            var standardReq = new CreateSubscriptionRequest(
-                customer.Id,
-                req.PackageId,
-                req.AutoRenew,
-                req.PaymentMethod,
-                req.PhoneNumber,
-                req.ReferenceNotes
-            );
-
-            var item = await service.CreateAsync(standardReq);
+            var item = await service.CreateForCustomerUserAsync(userId, req);
             return ApiResponse.Success(item, "Your subscription has been successfully purchased and set up").ToResult();
         });
 

@@ -213,6 +213,39 @@ public class SubscriptionService : ISubscriptionService
         );
     }
 
+    public async Task<SubscriptionResponse> CreateForCustomerUserAsync(int userId, CreateMySubscriptionRequest request)
+    {
+        _log.LogInformation("Processing customer self-subscription setup for logged-in User {UserId}", userId);
+
+        if (request == null)
+            throw new BadRequestException("Request payload cannot be empty.");
+
+        // 1. Resolve customer profile from user account
+        var customer = await _db.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (customer == null)
+        {
+            _log.LogWarning("Customer profile missing for authenticated user {UserId}", userId);
+            throw new NotFoundException("Our system was unable to find a Customer profile associated with your login account");
+        }
+
+        if (customer.Status != "active")
+        {
+            throw new ConflictException("Your customer account status is currently marked inactive. Cannot renew subscriptions.");
+        }
+
+        // 2. Wrap securely and delegating execution to the standard validation & creation pipeline
+        var standardRequest = new CreateSubscriptionRequest(
+            customer.Id,
+            request.PackageId,
+            request.AutoRenew,
+            request.PaymentMethod,
+            request.PhoneNumber,
+            request.ReferenceNotes
+        );
+
+        return await CreateAsync(standardRequest);
+    }
+
     public async Task<SubscriptionResponse> UpdateAsync(int id, UpdateSubscriptionRequest request)
     {
         _log.LogInformation("Processing update subscription request for ID {Id}", id);
