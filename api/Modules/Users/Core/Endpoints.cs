@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -62,5 +63,16 @@ public static class UserEndpoints
             }
         })
         .RequirePermission(Permissions.UsersCreate);
+
+        group.MapPut("/{id:int}/permissions", async (int id, UpdateUserPermissionsRequest req, HttpContext ctx, IUserService service, ILogger<LoggerMarker> log) =>
+        {
+            var principal = ctx.Items["User"] as ClaimsPrincipal;
+            var callerId = int.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var cid) ? (int?)cid : null;
+
+            log.LogInformation("PUT /api/users/{UserId}/permissions — {Count} overrides by caller {CallerId}", id, req.Overrides.Count, callerId);
+            var result = await service.UpdatePermissionsAsync(id, req, callerId);
+            return ApiResponse.Success(result, "Permissions updated").ToResult();
+        })
+        .RequirePermission(Permissions.RolesManage);
     }
 }

@@ -34,3 +34,6 @@ public class UserPermissionOverride
     public string Code { get; set; } = string.Empty;
     public bool IsGranted { get; set; }
 }
+
+public record UpdateUserPermissionsRequest(List<PermissionOverrideInput> Overrides);
+public record PermissionOverrideInput(string Code, bool IsGranted);

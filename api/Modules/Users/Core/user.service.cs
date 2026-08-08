@@ -3,6 +3,7 @@ using InternetProvider.Api.Modules.Users.Dtos;
 using InternetProvider.Api.Modules.Users.Interfaces;
 using InternetProvider.Api.Modules.Users.Core.Models;
 using InternetProvider.Api.Modules.Infrastructure.Core;
+using InternetProvider.Api.Modules.Roles.Core.Models;
 using InternetProvider.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -128,5 +129,43 @@ public class UserService : IUserService
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt
         };
+    }
+
+    public async Task<UserDetailResponse> UpdatePermissionsAsync(int userId, UpdateUserPermissionsRequest request, int? callerUserId)
+    {
+        var user = await _repo.GetByIdAsync(userId)
+            ?? throw new NotFoundException($"User with ID {userId} not found");
+
+        // Validate all submitted codes exist in the permissions table
+        var codes = request.Overrides.Select(o => o.Code).Distinct().ToList();
+        var foundPerms = await _db.Permissions
+            .Where(p => codes.Contains(p.Code))
+            .ToDictionaryAsync(p => p.Code, p => p.Id);
+
+        var unknown = codes.Except(foundPerms.Keys).ToList();
+        if (unknown.Count > 0)
+            throw new BadRequestException($"Unknown permission codes: {string.Join(", ", unknown)}");
+
+        // Replace all overrides atomically
+        var existing = _db.UserPermissions.Where(up => up.UserId == userId);
+        _db.UserPermissions.RemoveRange(existing);
+
+        foreach (var o in request.Overrides)
+        {
+            _db.UserPermissions.Add(new UserPermission
+            {
+                UserId = userId,
+                PermissionId = foundPerms[o.Code],
+                IsGranted = o.IsGranted,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = callerUserId,
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        _log.LogInformation("Permissions updated for user {UserId}: {Count} overrides by caller {CallerId}",
+            userId, request.Overrides.Count, callerUserId);
+
+        return await GetByIdAsync(userId);
     }
 }

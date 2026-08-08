@@ -8,4 +8,5 @@ public interface IUserService
     Task<PaginatedResponse<UserResponse>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc);
     Task<UserDetailResponse> GetByIdAsync(int id);
     Task<UserResponse> CreateAsync(CreateUserRequest request);
+    Task<UserDetailResponse> UpdatePermissionsAsync(int userId, UpdateUserPermissionsRequest request, int? callerUserId);
 }
