@@ -181,6 +181,18 @@ function closeDetail() {
   selectedUser.value = null
 }
 
+// Group flat permission strings by their prefix (e.g. "customer.view" → "customer")
+const groupedPermissions = computed(() => {
+  if (!selectedUser.value?.permissions) return {}
+  const groups: Record<string, string[]> = {}
+  for (const perm of selectedUser.value.permissions) {
+    const prefix = perm.split('.')[0] ?? perm
+    if (!groups[prefix]) groups[prefix] = []
+    groups[prefix].push(perm)
+  }
+  return groups
+})
+
 function resetCreateForm() {
   createForm.value = { email: '', password: '', fullName: '', phone: null, roleId: 1 }
   createValidation.value = {}
@@ -441,44 +453,27 @@ const roles = [
     <Teleport to="body">
       <div v-if="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDetail">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeDetail"></div>
-        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md animate-modal-in p-6">
-          <div class="flex items-center justify-between mb-5">
+        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-modal-in">
+          <!-- Sticky header -->
+          <div class="sticky top-0 z-10 bg-white dark:bg-gray-900 flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
             <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">User Details</h2>
             <button @click="closeDetail" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm">✕</button>
           </div>
 
-          <div v-if="detailLoading" class="flex justify-center py-10">
-            <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-
-          <div v-else-if="selectedUser" class="space-y-4">
-            <div class="flex items-center gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
-              <div class="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xl font-bold text-blue-600 dark:text-blue-400">
-                {{ selectedUser.fullName.charAt(0).toUpperCase() }}
-              </div>
-              <div>
-                <p class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ selectedUser.fullName }}</p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{{ selectedUser.roleName }}</p>
-              </div>
+          <div class="px-6 pb-6">
+            <div v-if="detailLoading" class="flex justify-center py-10">
+              <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
 
-            <div class="space-y-3">
-              <div class="flex justify-between py-2 border-b border-gray-50 dark:border-gray-800/50">
-                <span class="text-sm text-gray-500 dark:text-gray-400">User ID</span>
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.id }}</span>
-              </div>
-              <div class="flex justify-between py-2 border-b border-gray-50 dark:border-gray-800/50">
-                <span class="text-sm text-gray-500 dark:text-gray-400">Email</span>
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.email }}</span>
-              </div>
-              <div class="flex justify-between py-2 border-b border-gray-50 dark:border-gray-800/50">
-                <span class="text-sm text-gray-500 dark:text-gray-400">Phone</span>
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.phone || '—' }}</span>
-              </div>
-              <div class="flex justify-between py-2 border-b border-gray-50 dark:border-gray-800/50">
-                <span class="text-sm text-gray-500 dark:text-gray-400">Role</span>
-                <span class="text-sm font-medium">
-                  <span class="px-2 py-0.5 rounded-full text-xs font-medium"
+            <div v-else-if="selectedUser" class="space-y-6 pt-4">
+              <!-- Avatar + name -->
+              <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xl font-bold text-blue-600 dark:text-blue-400 flex-shrink-0">
+                  {{ selectedUser.fullName.charAt(0).toUpperCase() }}
+                </div>
+                <div>
+                  <p class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ selectedUser.fullName }}</p>
+                  <span class="px-2 py-0.5 rounded-full text-xs font-medium mt-1 inline-block"
                     :class="{
                       'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': selectedUser.roleName === 'Admin',
                       'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': selectedUser.roleName === 'Secretary',
@@ -487,17 +482,81 @@ const roles = [
                       'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400': selectedUser.roleName === 'Customer',
                     }"
                   >{{ selectedUser.roleName }}</span>
-                </span>
+                </div>
               </div>
-              <div class="flex justify-between py-2 border-b border-gray-50 dark:border-gray-800/50">
-                <span class="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                <span class="text-sm font-medium" :class="selectedUser.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">
-                  {{ selectedUser.isActive ? 'Active' : 'Inactive' }}
-                </span>
+
+              <!-- Core info rows -->
+              <div class="space-y-0 rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden text-sm">
+                <div class="flex justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50">
+                  <span class="text-gray-500 dark:text-gray-400">Email</span>
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.email }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                  <span class="text-gray-500 dark:text-gray-400">Phone</span>
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.phone || '—' }}</span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
+                  <span class="text-gray-500 dark:text-gray-400">Status</span>
+                  <span class="font-medium flex items-center gap-1.5">
+                    <span :class="selectedUser.isActive ? 'bg-green-500' : 'bg-gray-400'" class="w-2 h-2 rounded-full inline-block"></span>
+                    <span :class="selectedUser.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">{{ selectedUser.isActive ? 'Active' : 'Inactive' }}</span>
+                  </span>
+                </div>
+                <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                  <span class="text-gray-500 dark:text-gray-400">Created</span>
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.createdAt).toLocaleString() }}</span>
+                </div>
+                <div v-if="selectedUser.updatedAt" class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
+                  <span class="text-gray-500 dark:text-gray-400">Last Updated</span>
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.updatedAt).toLocaleString() }}</span>
+                </div>
               </div>
-              <div class="flex justify-between py-2">
-                <span class="text-sm text-gray-500 dark:text-gray-400">Created</span>
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.createdAt).toLocaleDateString() }}</span>
+
+              <!-- Permission Overrides -->
+              <div v-if="selectedUser.permissionOverrides && selectedUser.permissionOverrides.length > 0">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Permission Overrides
+                  <span class="ml-1.5 text-xs font-normal text-gray-400">(deviations from role defaults)</span>
+                </h3>
+                <div class="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/10 divide-y divide-amber-100 dark:divide-amber-800/40">
+                  <div
+                    v-for="ov in selectedUser.permissionOverrides"
+                    :key="ov.code"
+                    class="flex items-center justify-between px-4 py-2.5 text-sm"
+                  >
+                    <span class="font-mono text-gray-700 dark:text-gray-300 text-xs">{{ ov.code }}</span>
+                    <span
+                      class="px-2 py-0.5 rounded-full text-xs font-semibold"
+                      :class="ov.isGranted
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                        : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'"
+                    >
+                      {{ ov.isGranted ? '+ Granted' : '− Revoked' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Permissions grouped by category -->
+              <div v-if="selectedUser.permissions && selectedUser.permissions.length > 0">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Effective Permissions
+                  <span class="ml-1.5 text-xs font-normal text-gray-400">({{ selectedUser.permissions.length }} total)</span>
+                </h3>
+                <div class="space-y-3">
+                  <div v-for="(perms, group) in groupedPermissions" :key="group">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">{{ group }}</p>
+                    <div class="flex flex-wrap gap-1.5">
+                      <span
+                        v-for="perm in perms"
+                        :key="perm"
+                        class="px-2 py-0.5 rounded-full text-xs font-mono border"
+                        :class="selectedUser.permissionOverrides?.some(o => o.code === perm && o.isGranted)
+                          ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
+                          : 'bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'"
+                      >{{ perm.split('.')[1] }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -41,16 +41,8 @@ public static class UserEndpoints
         group.MapGet("/{id:int}", async (int id, IUserService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/users/{UserId} called", id);
-
-            try
-            {
-                var user = await service.GetByIdAsync(id);
-                return ApiResponse.Success(user, "User found").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                return ApiResponse.Error("User not found", 404).ToResult();
-            }
+            var user = await service.GetByIdAsync(id);
+            return ApiResponse.Success(user, "User found").ToResult();
         })
         .RequirePermission(Permissions.UsersView);
 
