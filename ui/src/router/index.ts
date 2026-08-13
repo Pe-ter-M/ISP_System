@@ -32,7 +32,7 @@ const router = createRouter({
         { path: 'sessions', name: 'sessions', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Live Sessions' } },
         { path: 'nas', name: 'nas', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'NAS Clients' } },
         { path: 'users', name: 'admin-users', component: () => import('../views/admin/UsersView.vue'), meta: { title: 'Users' } },
-        { path: 'roles', name: 'roles', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Roles' } },
+        { path: 'roles', name: 'roles', component: () => import('../views/admin/RolesView.vue'), meta: { title: 'Roles' } },
         { path: 'audit', name: 'audit', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Audit Log' } },
         { path: 'settings', name: 'settings', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Settings' } },
       ],

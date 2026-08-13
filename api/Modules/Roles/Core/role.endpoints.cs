@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Infrastructure.Core;
@@ -22,6 +19,30 @@ public static class RoleEndpoints
                 .Select(r => new { r.Id, r.Name, r.IsSystemRole, r.Description })
                 .ToListAsync();
             return ApiResponse.Success(list, "Roles retrieved").ToResult();
+        })
+        .RequirePermission(Permissions.RolesManage);
+
+        roles.MapDelete("/{roleId:int}", async (int roleId, AppDbContext db, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("DELETE /api/roles/{RoleId}", roleId);
+
+            var role = await db.Roles.FindAsync(roleId);
+            if (role is null)
+                return ApiResponse.Error("Role not found", 404).ToResult();
+
+            if (role.IsSystemRole)
+                return ApiResponse.Error("System roles cannot be deleted", 400).ToResult();
+
+            if (await db.Users.AnyAsync(u => u.RoleId == roleId))
+                return ApiResponse.Error("Role cannot be deleted because it is assigned to one or more users", 409).ToResult();
+
+            var rolePerms = db.RolePermissions.Where(rp => rp.RoleId == roleId);
+            db.RolePermissions.RemoveRange(rolePerms);
+            db.Roles.Remove(role);
+
+            await db.SaveChangesAsync();
+            log.LogInformation("Role deleted: {RoleId}", roleId);
+            return ApiResponse.Success(new { roleId }, "Role deleted").ToResult();
         })
         .RequirePermission(Permissions.RolesManage);
 
