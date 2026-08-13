@@ -16,6 +16,7 @@ public static class NasEndpoints
             string? search,
             string? sortBy,
             bool? sortDesc,
+            string? type,
             INasService service,
             ILogger<LoggerMarker> log) =>
         {
@@ -26,10 +27,10 @@ public static class NasEndpoints
             if (pageSize < 1) pageSize = 10;
             if (pageSize > 100) pageSize = 100;
 
-            log.LogInformation("GET /api/nas?page={Page}&size={Size}&search={Search}&sort={SortBy}&desc={SortDesc}",
-                page, pageSize, search, sortBy, desc);
+            log.LogInformation("GET /api/nas?page={Page}&size={Size}&search={Search}&sort={SortBy}&desc={SortDesc}&type={Type}",
+                page, pageSize, search, sortBy, desc, type);
 
-            var result = await service.GetAllAsync(page.Value, pageSize.Value, search, sortBy, desc);
+            var result = await service.GetAllAsync(page.Value, pageSize.Value, search, sortBy, desc, type);
             log.LogInformation("Returning {Count}/{Total} NAS clients", result.Items.Count, result.TotalCount);
             return ApiResponse.Success(result, "NAS clients retrieved").ToResult();
         })

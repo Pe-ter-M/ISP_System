@@ -17,10 +17,10 @@ public class NasService : INasService
         _log = log;
     }
 
-    public async Task<PaginatedResponse<NasResponse>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false)
+    public async Task<PaginatedResponse<NasResponse>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false, string? type = null)
     {
         _log.LogDebug("Processing get NAS clients (page {Page}, size {PageSize})", page, pageSize);
-        var result = await _repo.GetAllAsync(page, pageSize, search, sortBy, sortDesc);
+        var result = await _repo.GetAllAsync(page, pageSize, search, sortBy, sortDesc, type);
 
         return new PaginatedResponse<NasResponse>
         {
@@ -97,8 +97,6 @@ public class NasService : INasService
             throw new ConflictException("NAS name is required");
         if (string.IsNullOrWhiteSpace(request.Shortname))
             throw new ConflictException("Short name is required");
-        if (string.IsNullOrWhiteSpace(request.Secret))
-            throw new ConflictException("Secret is required");
         if (string.IsNullOrWhiteSpace(request.Type))
             throw new ConflictException("Type is required");
 
@@ -113,7 +111,9 @@ public class NasService : INasService
         existingNasClient.Shortname = request.Shortname;
         existingNasClient.Type = request.Type;
         existingNasClient.Ports = request.Ports;
-        existingNasClient.Secret = request.Secret;
+        // Secret is optional on update — blank keeps the existing shared secret (it is never returned by the API)
+        if (!string.IsNullOrWhiteSpace(request.Secret))
+            existingNasClient.Secret = request.Secret;
         existingNasClient.Server = request.Server;
         existingNasClient.Community = request.Community;
         existingNasClient.Description = request.Description;

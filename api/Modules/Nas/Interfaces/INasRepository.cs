@@ -6,7 +6,7 @@ namespace InternetProvider.Api.Modules.Nas.Interfaces;
 public interface INasRepository
 {
     Task<NasClient?> GetByIdAsync(int id);
-    Task<PaginatedResponse<NasClient>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false);
+    Task<PaginatedResponse<NasClient>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false, string? type = null);
     Task<NasClient> CreateAsync(NasClient nasClient);
     Task<NasClient> UpdateAsync(NasClient nasClient);
     Task<bool> DeleteAsync(int id);

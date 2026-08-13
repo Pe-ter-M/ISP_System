@@ -5,7 +5,7 @@ public record UpdateNasRequest(
     string Shortname,
     string Type,
     int? Ports,
-    string Secret,
+    string? Secret,
     string? Server,
     string? Community,
     string? Description

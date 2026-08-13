@@ -30,10 +30,10 @@ public class NasRepository : INasRepository
         return nasClient;
     }
 
-    public async Task<PaginatedResponse<NasClient>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false)
+    public async Task<PaginatedResponse<NasClient>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null, string? sortBy = null, bool sortDesc = false, string? type = null)
     {
-        _log.LogDebug("Fetching NAS clients (page {Page}, size {PageSize}, search '{Search}', sort '{SortBy}', desc {SortDesc})",
-            page, pageSize, search, sortBy, sortDesc);
+        _log.LogDebug("Fetching NAS clients (page {Page}, size {PageSize}, search '{Search}', sort '{SortBy}', desc {SortDesc}, type '{Type}')",
+            page, pageSize, search, sortBy, sortDesc, type);
         var query = _db.NasClients.AsNoTracking().AsQueryable();
 
         // ── Search ──
@@ -44,6 +44,12 @@ public class NasRepository : INasRepository
                 n.Nasname.ToLower().Contains(term) ||
                 n.Shortname.ToLower().Contains(term) ||
                 (n.Description != null && n.Description.ToLower().Contains(term)));
+        }
+
+        // ── Type filter ──
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            query = query.Where(n => n.Type == type);
         }
 
         // ── Sort ──
