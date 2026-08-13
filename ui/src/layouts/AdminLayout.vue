@@ -23,6 +23,8 @@ function isActive(path: string) {
 }
 
 function isExpanded(item: NavItem): boolean {
+  // Always show sub-items while on the parent page or any child page, so admins see what else exists
+  if (isActive(item.path)) return true
   const manual = expandedGroups.value[item.path]
   if (manual !== undefined) return manual
   return item.children?.some((c) => isActive(c.path)) ?? false
