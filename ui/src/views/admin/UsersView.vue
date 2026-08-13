@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { getUsers, createUser, getUserById, getPermissions, updateUserPermissions } from '@/services/user.service'
-import { useThemeStore } from '@/stores/theme.store'
-import type { UserDetail, Permission } from '@/types/user.types'
-import type { CreateUserPayload } from '@/services/user.service'
-
-const theme = useThemeStore()
+import { getUsers } from '@/services/user.service'
+import type { UserDetail } from '@/types/user.types'
 
 // ── State ──
 const users = ref<UserDetail[]>([])
@@ -17,35 +13,8 @@ const pageSize = ref(10)
 const totalCount = ref(0)
 const totalPages = ref(0)
 const search = ref('')
-const sortBy = ref('')
-const sortDesc = ref(false)
-const sortField = ref<string>('')
+const sortField = ref<string>('name')
 const sortDir = ref<'asc' | 'desc'>('asc')
-
-// Modal state
-const showCreateModal = ref(false)
-const showDetailModal = ref(false)
-const detailLoading = ref(false)
-const selectedUser = ref<UserDetail | null>(null)
-
-// All permissions cached on page load, released on navigation
-const allPermissions = ref<Permission[]>([])
-
-// Permission edit mode state
-const editMode = ref(false)
-const pendingOverrides = ref<Record<string, boolean>>({})
-const saveLoading = ref(false)
-const saveError = ref('')
-const saveSuccess = ref(false)
-
-// Create form
-const createForm = ref<CreateUserPayload>({
-  email: '', password: '', fullName: '', phone: null, roleId: 1,
-})
-const createLoading = ref(false)
-const createError = ref('')
-const createValidation = ref<Record<string, string>>({})
-const optimisticUser = ref<UserDetail | null>(null)
 
 // ── Computed ──
 const pageNumbers = computed(() => {
@@ -63,17 +32,14 @@ async function fetchUsers() {
     users.value = result.items
     totalCount.value = result.totalCount
     totalPages.value = result.totalPages
-  } catch (e: any) {
-    error.value = e?.message || 'Failed to load users'
+  } catch (e: unknown) {
+    error.value = errMsg(e, 'Failed to load users')
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  fetchUsers()
-  getPermissions().then(data => { allPermissions.value = data }).catch(() => {})
-})
+onMounted(fetchUsers)
 
 // ── Search with debounce ──
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -87,17 +53,12 @@ watch(search, () => {
 
 // ── Sort ──
 function toggleSort(field: string) {
-  if (sortField.value === field) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortField.value = field
-    sortDir.value = 'asc'
-  }
+  if (sortField.value === field) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  else { sortField.value = field; sortDir.value = 'asc' }
   page.value = 1
   fetchUsers()
 }
-
-function sortIcon(field: string): string {
+function sortIcon(field: string) {
   if (sortField.value !== field) return '↕'
   return sortDir.value === 'asc' ? '↑' : '↓'
 }
@@ -109,213 +70,31 @@ function goToPage(p: number) {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-// ── Create User (optimistic) ──
-function validateCreateForm(): boolean {
-  const v: Record<string, string> = {}
-  if (!createForm.value.email.trim()) v.email = 'Email is required'
-  else if (!/\S+@\S+\.\S+/.test(createForm.value.email)) v.email = 'Invalid email format'
-  if (!createForm.value.password) v.password = 'Password is required'
-  else if (createForm.value.password.length < 4) v.password = 'Minimum 4 characters'
-  if (!createForm.value.fullName.trim()) v.fullName = 'Full name is required'
-  if (!createForm.value.roleId) v.role = 'Role is required'
-  createValidation.value = v
-  return Object.keys(v).length === 0
+// ── Helpers ──
+function errMsg(e: unknown, fallback: string): string {
+  if (e && typeof e === 'object') {
+    const msg = (e as { message?: unknown }).message
+    if (typeof msg === 'string' && msg) return msg
+    const err = (e as { error?: unknown }).error
+    if (typeof err === 'string' && err) return err
+  }
+  return fallback
 }
 
-async function handleCreate() {
-  if (!validateCreateForm()) return
-
-  createLoading.value = true
-  createError.value = ''
-
-  // Build optimistic user
-  const temp: UserDetail = {
-    id: Date.now(), // temp id
-    email: createForm.value.email,
-    fullName: createForm.value.fullName,
-    phone: createForm.value.phone,
-    roleId: createForm.value.roleId,
-    roleName: roles.find(r => r.id === createForm.value.roleId)?.name || 'Unknown',
-    isActive: true,
-    createdAt: new Date().toISOString(),
-  }
-
-  // Optimistic insert at top of current page
-  users.value.unshift(temp)
-  optimisticUser.value = temp
-  showCreateModal.value = false
-
-  try {
-    const created = await createUser({
-      email: createForm.value.email.trim(),
-      password: createForm.value.password,
-      fullName: createForm.value.fullName.trim(),
-      phone: createForm.value.phone?.trim() || null,
-      roleId: createForm.value.roleId,
-    })
-
-    // Replace optimistic entry with real data
-    const idx = users.value.findIndex(u => u.id === temp.id)
-    if (idx !== -1) users.value[idx] = created
-    totalCount.value++
-    totalPages.value = Math.ceil(totalCount.value / pageSize.value)
-    optimisticUser.value = null
-
-    // Reset form
-    createForm.value = { email: '', password: '', fullName: '', phone: null, roleId: 1 }
-  } catch (e: any) {
-    // Remove optimistic entry on failure
-    const idx = users.value.findIndex(u => u.id === temp.id)
-    if (idx !== -1) users.value.splice(idx, 1)
-    optimisticUser.value = null
-    createError.value = e?.message || e?.error || 'Failed to create user'
-    showCreateModal.value = true
-  } finally {
-    createLoading.value = false
+function roleClass(roleName: string): string {
+  switch (roleName) {
+    case 'Admin': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+    case 'Secretary': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+    case 'Head Technician': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+    case 'Field Technician': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+    default: return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
   }
 }
 
-// ── Detail Modal ──
-async function openDetail(id: number) {
-  showDetailModal.value = true
-  detailLoading.value = true
-  selectedUser.value = null
-  try {
-    selectedUser.value = await getUserById(id)
-  } catch {
-    selectedUser.value = null
-  } finally {
-    detailLoading.value = false
-  }
+function fmtDate(iso: string | undefined): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString()
 }
-
-function closeDetail() {
-  showDetailModal.value = false
-  selectedUser.value = null
-  editMode.value = false
-  pendingOverrides.value = {}
-  saveError.value = ''
-  saveSuccess.value = false
-}
-
-// Permissions from the user's role (whether currently active or revoked via override)
-const roleBasePerms = computed((): Set<string> => {
-  if (!selectedUser.value) return new Set()
-  const overrideMap = new Map(
-    selectedUser.value.permissionOverrides?.map(o => [o.code, o.isGranted]) ?? [],
-  )
-  const perms = new Set<string>()
-  for (const p of selectedUser.value.permissions ?? []) {
-    if (overrideMap.get(p) !== true) perms.add(p) // not an extra grant → from role
-  }
-  for (const [code, granted] of overrideMap) {
-    if (!granted) perms.add(code) // revoked from role, still belongs to role
-  }
-  return perms
-})
-
-// All available permissions grouped by their group field
-const groupedAllPermissions = computed(() => {
-  const groups: Record<string, Permission[]> = {}
-  for (const p of allPermissions.value) {
-    const bucket = groups[p.group] ?? (groups[p.group] = [])
-    bucket.push(p)
-  }
-  return groups
-})
-
-// Effective state of a single permission code in edit mode
-function permState(code: string): 'role-active' | 'role-revoked' | 'extra-granted' | 'unavailable' {
-  if (code in pendingOverrides.value) {
-    return pendingOverrides.value[code] ? 'extra-granted' : 'role-revoked'
-  }
-  return roleBasePerms.value.has(code) ? 'role-active' : 'unavailable'
-}
-
-function togglePermission(code: string) {
-  const state = permState(code)
-  const updates = { ...pendingOverrides.value }
-  if (state === 'role-active') {
-    updates[code] = false
-  } else if (state === 'role-revoked' || state === 'extra-granted') {
-    delete updates[code]
-  } else {
-    updates[code] = true
-  }
-  pendingOverrides.value = updates
-}
-
-// Number of pending changes vs the original overrides
-const changesCount = computed(() => {
-  if (!selectedUser.value) return 0
-  const origMap = new Map(selectedUser.value.permissionOverrides?.map(o => [o.code, o.isGranted]) ?? [])
-  const allCodes = new Set([...Object.keys(pendingOverrides.value), ...origMap.keys()])
-  let count = 0
-  for (const code of allCodes) {
-    if (origMap.get(code) !== pendingOverrides.value[code]) count++
-  }
-  return count
-})
-
-function enterEditMode() {
-  pendingOverrides.value = Object.fromEntries(
-    selectedUser.value?.permissionOverrides?.map(o => [o.code, o.isGranted]) ?? [],
-  )
-  saveError.value = ''
-  saveSuccess.value = false
-  editMode.value = true
-}
-
-function exitEditMode() {
-  editMode.value = false
-  pendingOverrides.value = {}
-  saveError.value = ''
-}
-
-async function savePermissions() {
-  if (!selectedUser.value) return
-  saveLoading.value = true
-  saveError.value = ''
-  try {
-    const overrides = Object.entries(pendingOverrides.value).map(([code, isGranted]) => ({ code, isGranted }))
-    // PUT returns the updated user — no follow-up GET needed
-    const updated = await updateUserPermissions(selectedUser.value.id, overrides)
-    selectedUser.value = updated
-    exitEditMode()
-    saveSuccess.value = true
-  } catch (e: any) {
-    saveError.value = e?.message || e?.error || 'Failed to update permissions'
-  } finally {
-    saveLoading.value = false
-  }
-}
-
-// Group flat permission strings by their prefix (e.g. "customer.view" → "customer")
-const groupedPermissions = computed(() => {
-  if (!selectedUser.value?.permissions) return {}
-  const groups: Record<string, string[]> = {}
-  for (const perm of selectedUser.value.permissions) {
-    const prefix = perm.split('.')[0] ?? perm
-    if (!groups[prefix]) groups[prefix] = []
-    groups[prefix].push(perm)
-  }
-  return groups
-})
-
-function resetCreateForm() {
-  createForm.value = { email: '', password: '', fullName: '', phone: null, roleId: 1 }
-  createValidation.value = {}
-  createError.value = ''
-}
-
-// ── Roles from DB (hardcoded IDs match seeded data) ──
-const roles = [
-  { id: 1, name: 'Admin' },
-  { id: 2, name: 'Customer' },
-  { id: 3, name: 'Secretary' },
-  { id: 4, name: 'Head Technician' },
-  { id: 5, name: 'Field Technician' },
-]
 </script>
 
 <template>
@@ -326,38 +105,20 @@ const roles = [
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Users</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ totalCount }} total users</p>
       </div>
-      <div class="flex items-center gap-3">
-        <div class="relative">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            v-model="search"
-            type="text"
-            placeholder="Search users..."
-            class="pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all w-56"
-          />
-        </div>
-        <button
-          @click="resetCreateForm(); showCreateModal = true"
-          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2"
-        >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Add User
-        </button>
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input v-model="search" type="text" placeholder="Search name, email, phone..."
+          class="pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition w-64" />
       </div>
     </div>
 
-    <!-- ── Page Size Selector ── -->
+    <!-- ── Page Size ── -->
     <div class="flex items-center gap-2 mb-4">
       <span class="text-xs text-gray-400 dark:text-gray-500">Show</span>
-      <select
-        v-model="pageSize"
-        @change="page = 1; fetchUsers()"
-        class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-      >
+      <select v-model="pageSize" @change="page = 1; fetchUsers()"
+        class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs outline-none cursor-pointer">
         <option :value="5">5</option>
         <option :value="10">10</option>
         <option :value="20">20</option>
@@ -366,7 +127,7 @@ const roles = [
       <span class="text-xs text-gray-400 dark:text-gray-500">per page</span>
     </div>
 
-    <!-- ── Loading State ── -->
+    <!-- ── Loading ── -->
     <div v-if="loading && users.length === 0" class="flex justify-center py-20">
       <div class="flex flex-col items-center gap-3">
         <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -374,7 +135,7 @@ const roles = [
       </div>
     </div>
 
-    <!-- ── Error State ── -->
+    <!-- ── Error ── -->
     <div v-else-if="error && users.length === 0" class="text-center py-20">
       <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-6 max-w-md mx-auto">
         <p class="text-red-600 dark:text-red-400 font-medium">{{ error }}</p>
@@ -388,65 +149,37 @@ const roles = [
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-              <th @click="toggleSort('name')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap">
-                Name <span class="text-xs ml-1">{{ sortIcon('name') }}</span>
-              </th>
-              <th @click="toggleSort('email')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap">
-                Email <span class="text-xs ml-1">{{ sortIcon('email') }}</span>
-              </th>
-              <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Phone</th>
-              <th @click="toggleSort('role')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap">
-                Role <span class="text-xs ml-1">{{ sortIcon('role') }}</span>
-              </th>
-              <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Status</th>
-              <th class="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Actions</th>
+              <th @click="toggleSort('name')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap">Name <span class="text-xs ml-1">{{ sortIcon('name') }}</span></th>
+              <th @click="toggleSort('role')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap">Role <span class="text-xs ml-1">{{ sortIcon('role') }}</span></th>
+              <th @click="toggleSort('email')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap hidden sm:table-cell">Email <span class="text-xs ml-1">{{ sortIcon('email') }}</span></th>
+              <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">Phone</th>
+              <th @click="toggleSort('active')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap">Status <span class="text-xs ml-1">{{ sortIcon('active') }}</span></th>
+              <th @click="toggleSort('created')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap hidden lg:table-cell">Created <span class="text-xs ml-1">{{ sortIcon('created') }}</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="u in users"
-              :key="u.id"
-              class="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition"
-              :class="{ 'opacity-50': optimisticUser?.id === u.id }"
-            >
+            <tr v-for="u in users" :key="u.id"
+              class="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition">
               <td class="px-4 py-3">
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400 flex-shrink-0">
                     {{ u.fullName.charAt(0).toUpperCase() }}
                   </div>
-                  <div>
-                    <p class="font-medium text-gray-800 dark:text-gray-200">{{ u.fullName }}</p>
-                    <p v-if="optimisticUser?.id === u.id" class="text-xs text-blue-500 font-medium">Creating...</p>
-                  </div>
+                  <p class="font-medium text-gray-800 dark:text-gray-200">{{ u.fullName }}</p>
                 </div>
               </td>
-              <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ u.email }}</td>
-              <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ u.phone || '—' }}</td>
               <td class="px-4 py-3">
-                <span class="px-2 py-0.5 rounded-full text-xs font-medium"
-                  :class="{
-                    'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': u.roleName === 'Admin',
-                    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': u.roleName === 'Secretary',
-                    'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300': u.roleName === 'Head Technician',
-                    'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': u.roleName === 'Field Technician',
-                    'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400': u.roleName === 'Customer',
-                  }"
-                >{{ u.roleName }}</span>
+                <span :class="roleClass(u.roleName)" class="px-2 py-0.5 rounded-full text-xs font-medium">{{ u.roleName }}</span>
               </td>
+              <td class="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">{{ u.email }}</td>
+              <td class="px-4 py-3 text-gray-600 dark:text-gray-400 font-mono text-xs hidden md:table-cell">{{ u.phone || '—' }}</td>
               <td class="px-4 py-3">
                 <span class="flex items-center gap-1.5">
                   <span :class="u.isActive ? 'bg-green-500' : 'bg-gray-400'" class="w-2 h-2 rounded-full inline-block"></span>
                   <span class="text-xs text-gray-500 dark:text-gray-400">{{ u.isActive ? 'Active' : 'Inactive' }}</span>
                 </span>
               </td>
-              <td class="px-4 py-3 text-right">
-                <button
-                  @click="openDetail(u.id)"
-                  class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer"
-                >
-                  More Info
-                </button>
-              </td>
+              <td class="px-4 py-3 text-gray-500 dark:text-gray-400 hidden lg:table-cell">{{ fmtDate(u.createdAt) }}</td>
             </tr>
           </tbody>
         </table>
@@ -464,351 +197,14 @@ const roles = [
         </p>
         <div class="flex items-center gap-1">
           <button @click="goToPage(page - 1)" :disabled="page === 1"
-            class="px-3 py-1.5 text-xs rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer
-            bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
-            ←
-          </button>
-          <button
-            v-for="p in pageNumbers"
-            :key="p"
-            @click="goToPage(p)"
+            class="px-3 py-1.5 text-xs rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">←</button>
+          <button v-for="p in pageNumbers" :key="p" @click="goToPage(p)"
             class="w-8 h-7 text-xs rounded-lg transition cursor-pointer"
-            :class="p === page ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
-          >{{ p }}</button>
+            :class="p === page ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'">{{ p }}</button>
           <button @click="goToPage(page + 1)" :disabled="page === totalPages"
-            class="px-3 py-1.5 text-xs rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer
-            bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
-            →
-          </button>
+            class="px-3 py-1.5 text-xs rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">→</button>
         </div>
       </div>
     </div>
-
-    <!-- ── Create User Modal ── -->
-    <Teleport to="body">
-      <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="createError ? null : (showCreateModal = false)">
-        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="createError ? null : (showCreateModal = false)"></div>
-        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-modal-in p-6">
-          <div class="flex items-center justify-between mb-5">
-            <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">Add New User</h2>
-            <button @click="showCreateModal = false" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm">✕</button>
-          </div>
-
-          <form @submit.prevent="handleCreate" class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name *</label>
-              <input v-model="createForm.fullName" type="text" placeholder="John Kamau"
-                class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
-                :class="createValidation.fullName ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'"
-              />
-              <p v-if="createValidation.fullName" class="text-xs text-red-500 mt-1">{{ createValidation.fullName }}</p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email *</label>
-              <input v-model="createForm.email" type="email" placeholder="john@example.com"
-                class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
-                :class="createValidation.email ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'"
-              />
-              <p v-if="createValidation.email" class="text-xs text-red-500 mt-1">{{ createValidation.email }}</p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
-              <input v-model="createForm.phone" type="tel" placeholder="+254 712 345 678"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
-              />
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password *</label>
-              <input v-model="createForm.password" type="password" placeholder="••••••••"
-                class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
-                :class="createValidation.password ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'"
-              />
-              <p v-if="createValidation.password" class="text-xs text-red-500 mt-1">{{ createValidation.password }}</p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role *</label>
-              <select v-model="createForm.roleId"
-                class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
-                :class="createValidation.role ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'"
-              >
-                <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
-              </select>
-              <p v-if="createValidation.role" class="text-xs text-red-500 mt-1">{{ createValidation.role }}</p>
-            </div>
-
-            <p v-if="createError" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{{ createError }}</p>
-
-            <div class="flex gap-3 pt-2">
-              <button type="button" @click="showCreateModal = false"
-                class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">
-                Cancel
-              </button>
-              <button type="submit" :disabled="createLoading"
-                class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition flex items-center justify-center gap-2 cursor-pointer">
-                <span v-if="createLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                {{ createLoading ? 'Creating...' : 'Create User' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- ── Detail Modal ── -->
-    <Teleport to="body">
-      <div v-if="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDetail">
-        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeDetail"></div>
-        <div
-          class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full animate-modal-in flex flex-col"
-          :class="editMode ? 'max-w-2xl max-h-[92vh]' : 'max-w-xl max-h-[90vh]'"
-        >
-          <!-- Sticky header -->
-          <div class="flex-shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800">
-            <div>
-              <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">
-                {{ editMode ? 'Edit Permissions' : 'User Details' }}
-              </h2>
-              <p v-if="editMode && selectedUser" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                {{ selectedUser.fullName }} · {{ selectedUser.roleName }}
-              </p>
-            </div>
-            <div class="flex items-center gap-2">
-              <template v-if="editMode">
-                <span
-                  v-if="changesCount > 0"
-                  class="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                >{{ changesCount }} change{{ changesCount !== 1 ? 's' : '' }}</span>
-                <button
-                  @click="exitEditMode"
-                  class="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer"
-                >Cancel</button>
-                <button
-                  @click="savePermissions"
-                  :disabled="saveLoading || changesCount === 0"
-                  class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span v-if="saveLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  {{ saveLoading ? 'Saving…' : 'Save Changes' }}
-                </button>
-              </template>
-              <button @click="closeDetail" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm ml-1">✕</button>
-            </div>
-          </div>
-
-          <!-- Scrollable body -->
-          <div class="overflow-y-auto flex-1 px-6 pb-6">
-            <div v-if="detailLoading" class="flex justify-center py-10">
-              <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-
-            <div v-else-if="selectedUser">
-
-              <!-- ════ VIEW MODE ════ -->
-              <div v-if="!editMode" class="space-y-5 pt-4">
-                <!-- Success banner after a save -->
-                <div
-                  v-if="saveSuccess"
-                  class="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-sm"
-                >
-                  <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Permissions updated successfully.
-                </div>
-
-                <!-- Avatar + name -->
-                <div class="flex items-center gap-4">
-                  <div class="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-xl font-bold text-blue-600 dark:text-blue-400 flex-shrink-0">
-                    {{ selectedUser.fullName.charAt(0).toUpperCase() }}
-                  </div>
-                  <div>
-                    <p class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ selectedUser.fullName }}</p>
-                    <span class="px-2 py-0.5 rounded-full text-xs font-medium mt-1 inline-block"
-                      :class="{
-                        'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': selectedUser.roleName === 'Admin',
-                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300': selectedUser.roleName === 'Secretary',
-                        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300': selectedUser.roleName === 'Head Technician',
-                        'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': selectedUser.roleName === 'Field Technician',
-                        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400': selectedUser.roleName === 'Customer',
-                      }"
-                    >{{ selectedUser.roleName }}</span>
-                  </div>
-                </div>
-
-                <!-- Core info rows -->
-                <div class="rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden text-sm">
-                  <div class="flex justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50">
-                    <span class="text-gray-500 dark:text-gray-400">Email</span>
-                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.email }}</span>
-                  </div>
-                  <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
-                    <span class="text-gray-500 dark:text-gray-400">Phone</span>
-                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ selectedUser.phone || '—' }}</span>
-                  </div>
-                  <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                    <span class="text-gray-500 dark:text-gray-400">Status</span>
-                    <span class="font-medium flex items-center gap-1.5">
-                      <span :class="selectedUser.isActive ? 'bg-green-500' : 'bg-gray-400'" class="w-2 h-2 rounded-full"></span>
-                      <span :class="selectedUser.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">{{ selectedUser.isActive ? 'Active' : 'Inactive' }}</span>
-                    </span>
-                  </div>
-                  <div class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
-                    <span class="text-gray-500 dark:text-gray-400">Created</span>
-                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.createdAt).toLocaleString() }}</span>
-                  </div>
-                  <div v-if="selectedUser.updatedAt" class="flex justify-between px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                    <span class="text-gray-500 dark:text-gray-400">Last Updated</span>
-                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ new Date(selectedUser.updatedAt).toLocaleString() }}</span>
-                  </div>
-                </div>
-
-                <!-- Permission Overrides -->
-                <div v-if="selectedUser.permissionOverrides && selectedUser.permissionOverrides.length > 0">
-                  <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Permission Overrides
-                    <span class="ml-1.5 text-xs font-normal text-gray-400">deviations from role defaults</span>
-                  </h3>
-                  <div class="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/10 divide-y divide-amber-100 dark:divide-amber-800/40">
-                    <div
-                      v-for="ov in selectedUser.permissionOverrides"
-                      :key="ov.code"
-                      class="flex items-center justify-between px-4 py-2.5 text-sm"
-                    >
-                      <span class="font-mono text-gray-700 dark:text-gray-300 text-xs">{{ ov.code }}</span>
-                      <span class="px-2 py-0.5 rounded-full text-xs font-semibold"
-                        :class="ov.isGranted
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                          : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'"
-                      >{{ ov.isGranted ? '+ Granted' : '− Revoked' }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Effective Permissions -->
-                <div v-if="selectedUser.permissions && selectedUser.permissions.length > 0">
-                  <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                      Effective Permissions
-                      <span class="ml-1.5 text-xs font-normal text-gray-400">{{ selectedUser.permissions.length }} total</span>
-                    </h3>
-                    <button
-                      v-if="allPermissions.length > 0"
-                      @click="enterEditMode"
-                      class="text-xs font-medium px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 transition cursor-pointer"
-                    >Edit Permissions</button>
-                  </div>
-                  <div class="space-y-3">
-                    <div v-for="(perms, group) in groupedPermissions" :key="group">
-                      <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">{{ group }}</p>
-                      <div class="flex flex-wrap gap-1.5">
-                        <span
-                          v-for="perm in perms"
-                          :key="perm"
-                          class="px-2 py-0.5 rounded-full text-xs font-mono border"
-                          :class="selectedUser.permissionOverrides?.some(o => o.code === perm && o.isGranted)
-                            ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'"
-                        >{{ perm.split('.')[1] }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Edit button fallback (if no permissions section shown) -->
-                <div v-else-if="allPermissions.length > 0" class="pt-1">
-                  <button
-                    @click="enterEditMode"
-                    class="w-full py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition cursor-pointer"
-                  >Edit Permissions</button>
-                </div>
-              </div>
-
-              <!-- ════ EDIT MODE ════ -->
-              <div v-else class="space-y-5 pt-4">
-                <!-- Legend -->
-                <div class="rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 px-4 py-3">
-                  <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Legend — click any permission to toggle</p>
-                  <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-600 dark:text-gray-400">
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-400 dark:bg-green-500"></span>Role permission (click to revoke)</span>
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-400 dark:bg-red-500"></span>Revoked — click to restore</span>
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 dark:bg-amber-500"></span>Extra grant — click to remove</span>
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>Not granted — click to add</span>
-                  </div>
-                </div>
-
-                <!-- Permission grid -->
-                <div class="space-y-4">
-                  <div v-for="(perms, group) in groupedAllPermissions" :key="group">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{{ group }}</p>
-                    <div class="flex flex-wrap gap-1.5">
-                      <button
-                        v-for="perm in perms"
-                        :key="perm.code"
-                        @click="togglePermission(perm.code)"
-                        :title="perm.description"
-                        class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150 cursor-pointer select-none flex items-center gap-1"
-                        :class="{
-                          'bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50':
-                            permState(perm.code) === 'role-active',
-                          'bg-red-100 border-red-300 text-red-600 line-through dark:bg-red-900/30 dark:border-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50':
-                            permState(perm.code) === 'role-revoked',
-                          'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-600 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50':
-                            permState(perm.code) === 'extra-granted',
-                          'bg-transparent border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300':
-                            permState(perm.code) === 'unavailable',
-                        }"
-                      >
-                        <span class="opacity-80 text-[10px] leading-none">{{
-                          permState(perm.code) === 'role-active' ? '✓' :
-                          permState(perm.code) === 'role-revoked' ? '✗' :
-                          permState(perm.code) === 'extra-granted' ? '✦' : '+'
-                        }}</span>
-                        {{ perm.code.split('.')[1] }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Save error -->
-                <p v-if="saveError" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-4 py-3 border border-red-200 dark:border-red-800">
-                  {{ saveError }}
-                </p>
-
-                <!-- Bottom action bar -->
-                <div class="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800">
-                  <p class="text-xs text-gray-400 dark:text-gray-500">
-                    <span v-if="changesCount === 0">No changes yet</span>
-                    <span v-else class="text-blue-600 dark:text-blue-400 font-medium">{{ changesCount }} pending change{{ changesCount !== 1 ? 's' : '' }}</span>
-                  </p>
-                  <div class="flex gap-2">
-                    <button @click="exitEditMode"
-                      class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">
-                      Cancel
-                    </button>
-                    <button @click="savePermissions" :disabled="saveLoading || changesCount === 0"
-                      class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition flex items-center gap-1.5 cursor-pointer">
-                      <span v-if="saveLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      {{ saveLoading ? 'Saving…' : 'Save Changes' }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
-
-<style scoped>
-@keyframes modalIn {
-  from { opacity: 0; transform: scale(0.95) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-.animate-modal-in { animation: modalIn 0.2s ease-out forwards; }
-</style>

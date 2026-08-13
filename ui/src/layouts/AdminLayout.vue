@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useThemeStore } from '@/stores/theme.store'
 import { useOrganizationStore } from '@/stores/organization.store'
 import { getFilteredNav } from '@/config/navigation'
+import type { NavItem } from '@/config/navigation'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,11 +14,22 @@ const theme = useThemeStore()
 const org = useOrganizationStore()
 
 const sidebarOpen = ref(false)
+const expandedGroups = ref<Record<string, boolean>>({})
 
 const filteredNav = computed(() => getFilteredNav(auth.userPermissions))
 
 function isActive(path: string) {
   return route.path === path || route.path.startsWith(path + '/')
+}
+
+function isExpanded(item: NavItem): boolean {
+  const manual = expandedGroups.value[item.path]
+  if (manual !== undefined) return manual
+  return item.children?.some((c) => isActive(c.path)) ?? false
+}
+
+function toggleExpand(item: NavItem) {
+  expandedGroups.value[item.path] = !isExpanded(item)
 }
 
 function handleLogout() {
@@ -66,8 +78,9 @@ function goProfile() {
             {{ section.label }}
           </p>
           <div class="space-y-1">
+            <!-- Leaf item -->
             <RouterLink
-              v-for="item in section.items"
+              v-for="item in section.items.filter(i => !i.children?.length)"
               :key="item.path"
               :to="item.path"
               @click="closeSidebar"
@@ -76,9 +89,56 @@ function goProfile() {
                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'"
             >
-              <span v-html="item.icon" class="flex-shrink-0"></span>
+              <span v-if="item.icon" v-html="item.icon" class="flex-shrink-0"></span>
+              <span v-else class="w-4 flex-shrink-0"></span>
               {{ item.label }}
             </RouterLink>
+
+            <!-- Parent with dropdown children -->
+            <div v-for="item in section.items.filter(i => i.children?.length)" :key="item.path" class="space-y-1">
+              <div class="flex items-center rounded-lg">
+                <RouterLink
+                  :to="item.path"
+                  @click="closeSidebar"
+                  class="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 no-underline"
+                  :class="isActive(item.path)
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'"
+                >
+                  <span v-if="item.icon" v-html="item.icon" class="flex-shrink-0"></span>
+                  {{ item.label }}
+                </RouterLink>
+                <button
+                  @click="toggleExpand(item)"
+                  class="px-2 py-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer"
+                  :aria-label="`Toggle ${item.label} submenu`"
+                >
+                  <svg class="w-4 h-4 transition-transform duration-200" :class="isExpanded(item) ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Children -->
+              <div v-if="isExpanded(item)" class="ml-4 pl-3 border-l border-gray-200 dark:border-gray-800 space-y-1">
+                <RouterLink
+                  v-for="child in item.children"
+                  :key="child.path"
+                  :to="child.path"
+                  @click="closeSidebar"
+                  class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 no-underline"
+                  :class="isActive(child.path)
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    :class="isActive(child.path) ? 'bg-blue-500 dark:bg-blue-400' : 'bg-gray-300 dark:bg-gray-600'"
+                  ></span>
+                  {{ child.label }}
+                </RouterLink>
+              </div>
+            </div>
           </div>
         </div>
       </nav>

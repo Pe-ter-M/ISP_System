@@ -1,9 +1,11 @@
 export interface NavItem {
   label: string
   path: string
-  icon: string
+  icon?: string
   /** Show for ANY of these permissions. ['*'] = all authenticated users. */
   permissions?: string[]
+  /** Optional sub-items rendered as a collapsible dropdown under this item */
+  children?: NavItem[]
 }
 
 export interface NavSection {
@@ -40,7 +42,6 @@ export const navSections: NavSection[] = [
   {
     label: 'Management',
     items: [
-      { label: 'Customers', path: '/admin/customers', icon: I.customers, permissions: ['customer.view'] },
       { label: 'Subscriptions', path: '/admin/subscriptions', icon: I.subscriptions, permissions: ['subscription.view'] },
       { label: 'Plans', path: '/admin/plans', icon: I.plans, permissions: ['plan.view'] },
     ],
@@ -55,7 +56,16 @@ export const navSections: NavSection[] = [
   {
     label: 'System',
     items: [
-      { label: 'Users', path: '/admin/users', icon: I.users, permissions: ['users.view'] },
+      {
+        label: 'Users',
+        path: '/admin/users',
+        icon: I.users,
+        permissions: ['users.view'],
+        children: [
+          { label: 'Customers', path: '/admin/users/customers', permissions: ['customer.view'] },
+          { label: 'Staff', path: '/admin/users/staff', permissions: ['users.view'] },
+        ],
+      },
       { label: 'Roles', path: '/admin/roles', icon: I.roles, permissions: ['role.manage'] },
       { label: 'Audit Log', path: '/admin/audit', icon: I.audit, permissions: ['audit.view'] },
       { label: 'Settings', path: '/admin/settings', icon: I.settings, permissions: ['settings.view'] },
@@ -65,13 +75,17 @@ export const navSections: NavSection[] = [
 
 /** Filter nav sections based on user permissions. Returns only sections + items the user can see. */
 export function getFilteredNav(userPermissions: string[]) {
+  const hasAny = (perms?: string[]) => !perms || perms.includes('*') || perms.some((p) => userPermissions.includes(p))
+
   return navSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => {
-        if (!item.permissions || item.permissions.includes('*')) return true
-        return item.permissions.some((p) => userPermissions.includes(p))
-      }),
+      items: section.items
+        .filter((item) => hasAny(item.permissions))
+        .map((item) => item.children
+          ? { ...item, children: item.children.filter((c) => hasAny(c.permissions)) }
+          : item)
+        .filter((item) => !item.children || item.children.length > 0),
     }))
     .filter((section) => section.items.length > 0)
 }
