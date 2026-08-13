@@ -14,6 +14,12 @@ public static class Permissions
     public const string CustomersUpdate = "customer.update";
     public const string CustomersDelete = "customer.delete";
 
+    // ── Staff ──
+    public const string StaffView = "staff.view";
+    public const string StaffCreate = "staff.create";
+    public const string StaffUpdate = "staff.update";
+    public const string StaffDelete = "staff.delete";
+
     // ── Subscriptions ──
     public const string SubscriptionsView = "subscription.view";
     public const string SubscriptionsCreate = "subscription.create";
@@ -78,6 +84,10 @@ public static class Permissions
         { CustomersCreate, "Create customers" },
         { CustomersUpdate, "Edit customers" },
         { CustomersDelete, "Delete customers" },
+        { StaffView, "View staff members" },
+        { StaffCreate, "Create staff members" },
+        { StaffUpdate, "Edit staff members" },
+        { StaffDelete, "Delete staff members" },
         { SubscriptionsView, "View subscriptions" },
         { SubscriptionsCreate, "Create subscriptions" },
         { SubscriptionsUpdate, "Edit subscriptions" },

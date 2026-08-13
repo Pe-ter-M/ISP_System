@@ -63,7 +63,7 @@ export const navSections: NavSection[] = [
         permissions: ['users.view'],
         children: [
           { label: 'Customers', path: '/admin/users/customers', permissions: ['customer.view'] },
-          { label: 'Staff', path: '/admin/users/staff', permissions: ['users.view'] },
+          { label: 'Staff', path: '/admin/users/staff', permissions: ['staff.view'] },
         ],
       },
       { label: 'Roles', path: '/admin/roles', icon: I.roles, permissions: ['role.manage'] },

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using InternetProvider.Api.Modules.Customers.Core.Models;
 using InternetProvider.Api.Modules.Roles.Core.Models;
+using StaffEntity = InternetProvider.Api.Modules.Staff.Core.Models.Staff;
 
 namespace InternetProvider.Api.Modules.Users.Core.Models;
 
@@ -43,4 +44,6 @@ public class User
     public Role? Role { get; set; }
 
     public Customer? Customer { get; set; }
+
+    public StaffEntity? Staff { get; set; }
 }

@@ -16,6 +16,8 @@ using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Core;
 using InternetProvider.Api.Modules.Customers.Interfaces;
 using InternetProvider.Api.Modules.Customers.Core;
+using InternetProvider.Api.Modules.Staff.Interfaces;
+using InternetProvider.Api.Modules.Staff.Core;
 using InternetProvider.Api.Modules.Nas.Interfaces;
 using InternetProvider.Api.Modules.Nas.Core;
 using InternetProvider.Api.Modules.Subscriptions.Interfaces;
@@ -72,6 +74,10 @@ try
     // ── Customer services ────────────────────────────────────────────
     builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
     builder.Services.AddScoped<ICustomerService, CustomerService>();
+
+    // ── Staff services ───────────────────────────────────────────────
+    builder.Services.AddScoped<IStaffRepository, StaffRepository>();
+    builder.Services.AddScoped<IStaffService, StaffService>();
 
     // ── NAS services ─────────────────────────────────────────────────
     builder.Services.AddScoped<INasRepository, NasRepository>();
