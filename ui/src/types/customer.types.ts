@@ -36,7 +36,10 @@ export interface CustomerDetail {
   region: string | null
   gpsLat: number | null
   gpsLng: number | null
+  usernamePpoe: string
+  passwordPpoe: string
   status: string
+  hasActiveSubscription?: boolean
   notes: string | null
   createdAt: string
   updatedAt: string

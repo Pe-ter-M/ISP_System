@@ -50,5 +50,30 @@ public static class CustomerEndpoints
             }
         })
         .RequirePermission(Permissions.CustomersCreate);
+
+        group.MapPut("/{id:int}", async (int id, UpdateCustomerRequest req, ICustomerService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("PUT /api/customers/{CustomerId} — updating customer", id);
+            try
+            {
+                var customer = await service.UpdateAsync(id, req);
+                log.LogInformation("Customer {CustomerId} updated successfully", id);
+                return ApiResponse.Success(customer, "Customer updated successfully").ToResult();
+            }
+            catch (ConflictException ex)
+            {
+                return ApiResponse.Error(ex.Message, 409).ToResult();
+            }
+        })
+        .RequirePermission(Permissions.CustomersUpdate);
+
+        group.MapDelete("/{id:int}", async (int id, ICustomerService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("DELETE /api/customers/{CustomerId} called", id);
+            var result = await service.DeleteAsync(id);
+            log.LogInformation("Customer {CustomerId} delete completed (hard: {HardDeleted})", id, result.HardDeleted);
+            return ApiResponse.Success(result, result.Message).ToResult();
+        })
+        .RequirePermission(Permissions.CustomersDelete);
     }
 }

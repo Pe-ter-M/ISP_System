@@ -3,6 +3,7 @@ using InternetProvider.Api.Modules.Customers.Dtos;
 using InternetProvider.Api.Modules.Customers.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using InternetProvider.Api.Modules.Users.Core.Models;
+using InternetProvider.Api.Modules.Roles.Core.Models;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 using InternetProvider.Api.Services;
 
@@ -58,6 +59,7 @@ public class CustomerService : ICustomerService
             throw new NotFoundException($"Customer with ID {id} not found");
 
         var subscriptions = await _repo.GetSubscriptionsAsync(id);
+        var hasActiveSubscription = await _db.Subscriptions.AnyAsync(s => s.CustomerId == id && s.Status == "active");
 
         return new CustomerDetailResponse
         {
@@ -78,6 +80,7 @@ public class CustomerService : ICustomerService
             PasswordPpoe = c.PasswordPpoe,
             Status = c.Status,
             Notes = c.Notes,
+            HasActiveSubscription = hasActiveSubscription,
             CreatedAt = c.User!.CreatedAt,
             UpdatedAt = c.UpdatedAt,
             Subscriptions = subscriptions,
@@ -190,5 +193,101 @@ public class CustomerService : ICustomerService
             Status = c.Status,
             CreatedAt = c.User!.CreatedAt,
         };
+    }
+
+    public async Task<CustomerSummaryResponse> UpdateAsync(int id, UpdateCustomerRequest request)
+    {
+        _log.LogDebug("Processing update customer request for ID {CustomerId}", id);
+
+        var customer = await _repo.GetByIdAsync(id);
+        if (customer == null)
+            throw new NotFoundException($"Customer with ID {id} not found");
+        var user = customer.User;
+        if (user == null)
+            throw new NotFoundException($"User account for customer {id} not found");
+
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            throw new ConflictException("Full name is required");
+        if (string.IsNullOrWhiteSpace(request.Email))
+            throw new ConflictException("Email is required");
+        if (string.IsNullOrWhiteSpace(request.Phone))
+            throw new ConflictException("Phone number is required");
+
+        if (user.Email != request.Email && await _db.Users.AnyAsync(u => u.Email == request.Email))
+            throw new ConflictException($"Email '{request.Email}' is already in use");
+        if (user.Phone != request.Phone && await _db.Users.AnyAsync(u => u.Phone == request.Phone))
+            throw new ConflictException($"Phone '{request.Phone}' is already in use");
+
+        var status = request.Status ?? customer.Status;
+        if (status is not ("active" or "inactive"))
+            throw new ConflictException("Invalid customer status choice. Choose 'active' or 'inactive'.");
+
+        user.FullName = request.FullName;
+        user.Email = request.Email;
+        user.Phone = request.Phone;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        customer.BusinessName = request.BusinessName;
+        customer.CustomerType = string.IsNullOrWhiteSpace(request.CustomerType) ? "residential" : request.CustomerType;
+        customer.ServiceAddress = request.ServiceAddress;
+        customer.City = request.City;
+        customer.Region = request.Region;
+        customer.GpsLat = request.GpsLat;
+        customer.GpsLng = request.GpsLng;
+        customer.Status = status;
+        customer.Notes = request.Notes;
+        customer.UpdatedAt = DateTime.UtcNow;
+
+        await _repo.UpdateAsync(customer);
+        await _db.SaveChangesAsync(); // persist the tracked user changes too
+
+        _log.LogInformation("Customer {CustomerId} updated successfully", id);
+        return await BuildSummaryAsync(customer);
+    }
+
+    public async Task<DeleteCustomerResult> DeleteAsync(int id)
+    {
+        _log.LogDebug("Processing delete customer request for ID {CustomerId}", id);
+
+        var customer = await _repo.GetByIdAsync(id);
+        if (customer == null)
+            throw new NotFoundException($"Customer with ID {id} not found");
+
+        var hasSubscriptions = await _db.Subscriptions.AnyAsync(s => s.CustomerId == id);
+        if (hasSubscriptions)
+        {
+            // Soft delete — keep billing and subscription history intact
+            customer.Status = "inactive";
+            customer.UpdatedAt = DateTime.UtcNow;
+            if (customer.User != null)
+            {
+                customer.User.IsActive = false;
+                customer.User.UpdatedAt = DateTime.UtcNow;
+            }
+            await _db.SaveChangesAsync();
+            _log.LogInformation("Customer {CustomerId} has subscription history — deactivated instead of deleted", id);
+            return new DeleteCustomerResult(false, "Customer has subscription history — the account was deactivated instead of deleted.");
+        }
+
+        // Hard delete
+        if (customer.User != null)
+        {
+            var overrides = await _db.UserPermissions.Where(up => up.UserId == customer.UserId).ToListAsync();
+            _db.UserPermissions.RemoveRange(overrides);
+        }
+        _db.Customers.Remove(customer); // remove dependent first — User→Customer FK is required (no cascade)
+        if (customer.User != null)
+            _db.Users.Remove(customer.User);
+        await _db.SaveChangesAsync();
+        _log.LogInformation("Customer {CustomerId} and linked user account hard deleted", id);
+        return new DeleteCustomerResult(true, "Customer deleted successfully.");
+    }
+
+    private async Task<CustomerSummaryResponse> BuildSummaryAsync(Models.Customer c)
+    {
+        var summary = MapSummary(c);
+        summary.HasActiveSubscription = await _db.Subscriptions
+            .AnyAsync(s => s.CustomerId == c.Id && s.Status == "active");
+        return summary;
     }
 }

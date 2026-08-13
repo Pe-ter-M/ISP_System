@@ -121,6 +121,15 @@ public class CustomerRepository : ICustomerRepository
         return customer;
     }
 
+    public async Task<Models.Customer> UpdateAsync(Models.Customer customer)
+    {
+        _log.LogDebug("Updating customer {CustomerId}", customer.Id);
+        _db.Customers.Update(customer);
+        await _db.SaveChangesAsync();
+        _log.LogDebug("Customer {CustomerId} updated", customer.Id);
+        return customer;
+    }
+
     public async Task<bool> IsPhoneTakenAsync(string phone)
     {
         return await _db.Users.AnyAsync(u => u.Phone == phone);

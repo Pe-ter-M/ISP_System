@@ -1,5 +1,5 @@
 import api from './api'
-import type { PaginatedCustomers, CustomerDetail } from '@/types/customer.types'
+import type { PaginatedCustomers, CustomerDetail, CustomerSummary } from '@/types/customer.types'
 
 export interface CreateCustomerPayload {
   email: string
@@ -11,6 +11,26 @@ export interface CreateCustomerPayload {
   serviceAddress: string | null
   city: string | null
   region: string | null
+}
+
+export interface UpdateCustomerPayload {
+  fullName: string
+  email: string
+  phone: string
+  businessName: string | null
+  customerType: string
+  serviceAddress: string | null
+  city: string | null
+  region: string | null
+  gpsLat: number | null
+  gpsLng: number | null
+  status: string
+  notes: string | null
+}
+
+export interface DeleteCustomerResult {
+  hardDeleted: boolean
+  message: string
 }
 
 export async function getCustomers(
@@ -36,7 +56,17 @@ export async function getCustomerById(id: number): Promise<CustomerDetail> {
   return res.data as CustomerDetail
 }
 
-export async function createCustomer(payload: CreateCustomerPayload): Promise<CustomerDetail> {
+export async function createCustomer(payload: CreateCustomerPayload): Promise<CustomerSummary> {
   const res = await api.post('/customers', payload)
-  return res.data as CustomerDetail
+  return res.data as CustomerSummary
+}
+
+export async function updateCustomer(id: number, payload: UpdateCustomerPayload): Promise<CustomerSummary> {
+  const res = await api.put(`/customers/${id}`, payload)
+  return res.data as CustomerSummary
+}
+
+export async function deleteCustomer(id: number): Promise<DeleteCustomerResult> {
+  const res = await api.delete(`/customers/${id}`)
+  return res.data as DeleteCustomerResult
 }

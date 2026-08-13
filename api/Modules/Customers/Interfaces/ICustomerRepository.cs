@@ -11,5 +11,6 @@ public interface ICustomerRepository
     Task<List<CustomerSubscriptionDto>> GetSubscriptionsAsync(int customerId);
     Task<string> GenerateCustomerCodeAsync();
     Task<Customer> CreateAsync(Customer customer);
+    Task<Customer> UpdateAsync(Customer customer);
     Task<bool> IsPhoneTakenAsync(string phone);
 }

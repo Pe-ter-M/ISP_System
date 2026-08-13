@@ -42,6 +42,7 @@ public class CustomerDetailResponse
     public string PasswordPpoe { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
     public string? Notes { get; set; }
+    public bool HasActiveSubscription { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<CustomerSubscriptionDto> Subscriptions { get; set; } = new();

@@ -93,7 +93,12 @@ function roleClass(roleName: string): string {
 
 function fmtDate(iso: string | undefined): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString()
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const day = d.getDate()
+  const suffix = day % 10 === 1 && day !== 11 ? 'st' : day % 10 === 2 && day !== 12 ? 'nd' : day % 10 === 3 && day !== 13 ? 'rd' : 'th'
+  const month = d.toLocaleString('en-GB', { month: 'long' })
+  return `${day}${suffix} ${month} ${d.getFullYear()}`
 }
 </script>
 
