@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Plans.Core.Models;
+using InternetProvider.Api.Modules.Plans.Dtos;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 using InternetProvider.Api.Modules.Radius.Core.Models;
@@ -27,6 +29,96 @@ public class PlanRepository : IPlanRepository
             .ToListAsync();
         _log.LogDebug("Found {Count} active plans", plans.Count);
         return plans;
+    }
+
+    public async Task<PaginatedResponse<RadiusPackage>> GetAllPagedAsync(
+        int page = 1, int pageSize = 10, string? search = null, string? status = null,
+        string? sortBy = null, bool sortDesc = false)
+    {
+        _log.LogDebug("Fetching plans page {Page} size {PageSize} search '{Search}' status '{Status}' sort {SortBy}", page, pageSize, search, status, sortBy);
+
+        var query = ApplyFilters(_db.RadiusPackages.AsQueryable(), search, status);
+
+        // ── Sort (DB columns only; 'subscribers' is resolved in the service) ──
+        query = (sortBy?.ToLower()) switch
+        {
+            "name" => sortDesc ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+            "price" or "pricecents" => sortDesc ? query.OrderByDescending(p => p.PriceCents) : query.OrderBy(p => p.PriceCents),
+            "cycle" or "billingcycle" => sortDesc ? query.OrderByDescending(p => p.BillingCycle) : query.OrderBy(p => p.BillingCycle),
+            "speed" or "bandwidthdown" or "bandwidthdownkbps" => sortDesc ? query.OrderByDescending(p => p.BandwidthDownKbps) : query.OrderBy(p => p.BandwidthDownKbps),
+            "devices" or "maxdevices" => sortDesc ? query.OrderByDescending(p => p.MaxDevices) : query.OrderBy(p => p.MaxDevices),
+            "active" or "isactive" => sortDesc ? query.OrderByDescending(p => p.IsActive) : query.OrderBy(p => p.IsActive),
+            "sortorder" => sortDesc ? query.OrderByDescending(p => p.SortOrder) : query.OrderBy(p => p.SortOrder),
+            _ => query.OrderBy(p => p.SortOrder).ThenBy(p => p.Id)
+        };
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        _log.LogDebug("Fetched {Count}/{Total} plans (page {Page}, size {PageSize})", items.Count, totalCount, page, pageSize);
+        return new PaginatedResponse<RadiusPackage>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<List<RadiusPackage>> GetFilteredAsync(string? search = null, string? status = null)
+    {
+        _log.LogDebug("Fetching all plans matching search '{Search}' status '{Status}'", search, status);
+
+        var plans = await ApplyFilters(_db.RadiusPackages.AsQueryable(), search, status)
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Id)
+            .ToListAsync();
+
+        _log.LogDebug("Found {Count} matching plans", plans.Count);
+        return plans;
+    }
+
+    public async Task<PlanStatsResponse> GetStatsAsync()
+    {
+        _log.LogDebug("Computing plan stats");
+        var total = await _db.RadiusPackages.CountAsync();
+        var active = await _db.RadiusPackages.CountAsync(p => p.IsActive);
+        var subscribers = await _db.Subscriptions
+            .CountAsync(s => s.Status == "active" && _db.RadiusPackages.Any(p => p.Id == s.PackageId));
+
+        _log.LogDebug("Plan stats: {Total} total, {Active} active, {Subscribers} subscribers", total, active, subscribers);
+        return new PlanStatsResponse
+        {
+            TotalPlans = total,
+            ActivePlans = active,
+            InactivePlans = total - active,
+            TotalSubscribers = subscribers,
+        };
+    }
+
+    private IQueryable<RadiusPackage> ApplyFilters(IQueryable<RadiusPackage> query, string? search, string? status)
+    {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(p =>
+                p.Name.ToLower().Contains(term) ||
+                (p.Description != null && p.Description.ToLower().Contains(term)) ||
+                p.BillingCycle.ToLower().Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (status.Equals("active", StringComparison.OrdinalIgnoreCase))
+                query = query.Where(p => p.IsActive);
+            else if (status.Equals("inactive", StringComparison.OrdinalIgnoreCase))
+                query = query.Where(p => !p.IsActive);
+        }
+
+        return query;
     }
 
     public async Task<RadiusPackage?> GetByIdAsync(int id)

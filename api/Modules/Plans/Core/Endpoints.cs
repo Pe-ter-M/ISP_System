@@ -39,6 +39,41 @@ public static class PlanEndpoints
         // ── Admin endpoints (auth required) ──
         var adminGroup = app.MapGroup("/api/admin/plans").WithTags("Plans Admin");
 
+        adminGroup.MapGet("/", async (
+            int? page,
+            int? pageSize,
+            string? search,
+            string? status,
+            string? sortBy,
+            bool? sortDesc,
+            bool? subscribersCount,
+            IPlanService service,
+            ILogger<LoggerMarker> log) =>
+        {
+            page ??= 1;
+            pageSize ??= 10;
+            bool desc = sortDesc ?? false;
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 10;
+            if (pageSize > 100) pageSize = 100;
+
+            log.LogInformation("GET /api/admin/plans?page={Page}&size={PageSize}&search={Search}&status={Status}&sort={SortBy}&desc={SortDesc}",
+                page, pageSize, search, status, sortBy, desc);
+            var includeCount = subscribersCount ?? true;
+            var result = await service.GetAllAdminPagedAsync(page.Value, pageSize.Value, search, status, sortBy, desc, includeCount);
+            log.LogInformation("Returning {Count}/{Total} plans", result.Items.Count, result.TotalCount);
+            return ApiResponse.Success(result, $"Found {result.TotalCount} plans").ToResult();
+        })
+        .RequirePermission(Permissions.PlansView);
+
+        adminGroup.MapGet("/stats", async (IPlanService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("GET /api/admin/plans/stats called");
+            var stats = await service.GetPlanStatsAsync();
+            return ApiResponse.Success(stats, "Plan stats retrieved").ToResult();
+        })
+        .RequirePermission(Permissions.PlansView);
+
         adminGroup.MapPost("/", async (CreatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/admin/plans — creating {Name}", req.Name);

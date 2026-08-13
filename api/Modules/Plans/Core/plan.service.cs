@@ -1,3 +1,4 @@
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Plans.Dtos;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Core.Models;
@@ -46,6 +47,91 @@ public class PlanService : IPlanService
         
         _log.LogDebug("Returning {Count} plan summaries", responses.Count);
         return responses;
+    }
+
+    public async Task<PaginatedResponse<PlanSummaryResponse>> GetAllAdminPagedAsync(
+        int page = 1, int pageSize = 10, string? search = null, string? status = null,
+        string? sortBy = null, bool sortDesc = false, bool includeSubscribersCount = true)
+    {
+        _log.LogDebug("Processing paged admin plans request (page {Page}, size {PageSize}, search '{Search}', status '{Status}', sort {SortBy})",
+            page, pageSize, search, status, sortBy);
+
+        List<RadiusPackage> pageItems;
+        int totalCount;
+        Dictionary<int, int>? countsByPlan = null;
+
+        var sortBySubscribers = !string.IsNullOrWhiteSpace(sortBy) &&
+                                sortBy.Equals("subscribers", StringComparison.OrdinalIgnoreCase);
+
+        if (sortBySubscribers)
+        {
+            // Subscriber count isn't a DB column — resolve counts + order in memory over the filtered set
+            var all = await _repo.GetFilteredAsync(search, status);
+            totalCount = all.Count;
+
+            countsByPlan = new Dictionary<int, int>(all.Count);
+            foreach (var p in all)
+            {
+                countsByPlan[p.Id] = await _repo.GetActiveSubscribersCountAsync(p.Id);
+            }
+
+            var ordered = sortDesc
+                ? all.OrderByDescending(p => countsByPlan[p.Id]).ThenBy(p => p.SortOrder).ThenBy(p => p.Id)
+                : all.OrderBy(p => countsByPlan[p.Id]).ThenBy(p => p.SortOrder).ThenBy(p => p.Id);
+
+            pageItems = ordered
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+        }
+        else
+        {
+            var result = await _repo.GetAllPagedAsync(page, pageSize, search, status, sortBy, sortDesc);
+            pageItems = result.Items;
+            totalCount = result.TotalCount;
+        }
+
+        var responses = new List<PlanSummaryResponse>(pageItems.Count);
+        foreach (var p in pageItems)
+        {
+            int? count = null;
+            if (includeSubscribersCount)
+            {
+                count = countsByPlan != null && countsByPlan.TryGetValue(p.Id, out var c)
+                    ? c
+                    : await _repo.GetActiveSubscribersCountAsync(p.Id);
+            }
+
+            responses.Add(new PlanSummaryResponse
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                PriceCents = p.PriceCents,
+                BillingCycle = p.BillingCycle,
+                BandwidthUpKbps = p.BandwidthUpKbps,
+                BandwidthDownKbps = p.BandwidthDownKbps,
+                MaxDevices = p.MaxDevices,
+                IsActive = p.IsActive,
+                SortOrder = p.SortOrder,
+                ActiveSubscribersCount = count
+            });
+        }
+
+        _log.LogDebug("Returning {Count}/{Total} plan summaries", responses.Count, totalCount);
+        return new PaginatedResponse<PlanSummaryResponse>
+        {
+            Items = responses,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<PlanStatsResponse> GetPlanStatsAsync()
+    {
+        _log.LogDebug("Processing plan stats request");
+        return await _repo.GetStatsAsync();
     }
 
     public async Task<PlanDetailResponse> GetDetailByIdAsync(int id, bool includeSubscribersCount = false)
@@ -146,6 +232,8 @@ public class PlanService : IPlanService
             BandwidthUpKbps = created.BandwidthUpKbps,
             BandwidthDownKbps = created.BandwidthDownKbps,
             MaxDevices = created.MaxDevices,
+            IsActive = created.IsActive,
+            SortOrder = created.SortOrder,
         };
     }
 
@@ -165,8 +253,7 @@ public class PlanService : IPlanService
             throw new ConflictException("Plan name cannot be empty");
         if (request.PriceCents.HasValue && request.PriceCents.Value < 0)
             throw new ConflictException("Plan price cannot be negative");
-        var maxDevices = request.MaxDevices ?? 1;
-        if (maxDevices <= 0)
+        if (request.MaxDevices.HasValue && request.MaxDevices.Value <= 0)
             throw new ConflictException("Max devices must be 1 or greater");
 
         if (request.SessionTimeoutSeconds.HasValue && request.SessionTimeoutSeconds.Value < 0)
@@ -193,7 +280,7 @@ public class PlanService : IPlanService
         if (request.BandwidthDownKbps.HasValue) plan.BandwidthDownKbps = request.BandwidthDownKbps;
         if (request.SessionTimeoutSeconds.HasValue) plan.SessionTimeoutSeconds = request.SessionTimeoutSeconds.Value;
         if (request.IdleTimeoutSeconds.HasValue) plan.IdleTimeoutSeconds = request.IdleTimeoutSeconds.Value;
-        plan.MaxDevices = maxDevices;
+        if (request.MaxDevices.HasValue) plan.MaxDevices = request.MaxDevices.Value;
         if (request.SortOrder.HasValue) plan.SortOrder = request.SortOrder.Value;
         if (request.IsActive.HasValue) plan.IsActive = request.IsActive.Value;
 
@@ -209,6 +296,8 @@ public class PlanService : IPlanService
             BandwidthUpKbps = plan.BandwidthUpKbps,
             BandwidthDownKbps = plan.BandwidthDownKbps,
             MaxDevices = plan.MaxDevices,
+            IsActive = plan.IsActive,
+            SortOrder = plan.SortOrder,
         };
     }
 

@@ -10,6 +10,8 @@ public class PlanSummaryResponse
     public int? BandwidthUpKbps { get; set; }
     public int? BandwidthDownKbps { get; set; }
     public int MaxDevices { get; set; }
+    public bool IsActive { get; set; } = true;
+    public int SortOrder { get; set; }
 
     // Added friendly presentation properties for Frontend (KES formatting)
     public double Price => PriceCents / 100.0;
