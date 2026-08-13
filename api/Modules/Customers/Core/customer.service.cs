@@ -21,14 +21,28 @@ public class CustomerService : ICustomerService
         _db = db;
     }
 
-    public async Task<PaginatedResponse<CustomerSummaryResponse>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc)
+    public async Task<PaginatedResponse<CustomerSummaryResponse>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc, string? subscription = null)
     {
         _log.LogDebug("Getting customers page {Page} size {PageSize}", page, pageSize);
-        var result = await _repo.GetAllAsync(page, pageSize, search, sortBy, sortDesc);
+        var result = await _repo.GetAllAsync(page, pageSize, search, sortBy, sortDesc, subscription);
+
+        // Resolve which of the returned customers currently hold an active subscription (one grouped query)
+        var customerIds = result.Items.Select(c => c.Id).ToList();
+        var withActiveSubscription = await _db.Subscriptions
+            .Where(s => customerIds.Contains(s.CustomerId) && s.Status == "active")
+            .Select(s => s.CustomerId)
+            .Distinct()
+            .ToListAsync();
+        var activeSet = withActiveSubscription.ToHashSet();
 
         return new PaginatedResponse<CustomerSummaryResponse>
         {
-            Items = result.Items.Select(MapSummary).ToList(),
+            Items = result.Items.Select(c =>
+            {
+                var m = MapSummary(c);
+                m.HasActiveSubscription = activeSet.Contains(c.Id);
+                return m;
+            }).ToList(),
             TotalCount = result.TotalCount,
             Page = result.Page,
             PageSize = result.PageSize,

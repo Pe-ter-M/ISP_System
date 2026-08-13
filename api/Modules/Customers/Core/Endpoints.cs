@@ -14,7 +14,7 @@ public static class CustomerEndpoints
         var group = app.MapGroup("/api/customers").WithTags("Customers");
 
         group.MapGet("/", async (
-            int? page, int? pageSize, string? search, string? sortBy, bool? sortDesc,
+            int? page, int? pageSize, string? search, string? sortBy, bool? sortDesc, string? subscription,
             ICustomerService service, ILogger<LoggerMarker> log) =>
         {
             page ??= 1; pageSize ??= 10;
@@ -22,8 +22,8 @@ public static class CustomerEndpoints
             if (pageSize < 1) pageSize = 10;
             if (pageSize > 100) pageSize = 100;
 
-            log.LogInformation("GET /api/customers?page={Page}&size={Size}", page, pageSize);
-            var result = await service.GetAllAsync(page.Value, pageSize.Value, search, sortBy, sortDesc ?? false);
+            log.LogInformation("GET /api/customers?page={Page}&size={Size}&subscription={Subscription}", page, pageSize, subscription);
+            var result = await service.GetAllAsync(page.Value, pageSize.Value, search, sortBy, sortDesc ?? false, subscription);
             return ApiResponse.Success(result, "Customers retrieved").ToResult();
         })
         .RequirePermission(Permissions.CustomersView);

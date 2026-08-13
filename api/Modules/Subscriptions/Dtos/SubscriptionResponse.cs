@@ -13,5 +13,12 @@ public record SubscriptionResponse(
     // ── Associated Payment Log Details ──
     int PaidAmountCents,
     string? PaymentReference,
-    string PaymentStatus
+    string PaymentStatus,
+    string? PaymentMethod,
+    DateTime? PaymentCompletedAt,
+
+    // ── Friendly display fields ──
+    string CustomerFullName,
+    string CustomerCode,
+    string PlanName
 );

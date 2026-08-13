@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 using InternetProvider.Api.Modules.Subscriptions.Dtos;
 using InternetProvider.Api.Modules.Subscriptions.Interfaces;
@@ -28,37 +29,36 @@ public class SubscriptionService : ISubscriptionService
         _log = log;
     }
 
-    public async Task<List<SubscriptionResponse>> GetAllAsync()
+    public async Task<PaginatedResponse<SubscriptionResponse>> GetAllPagedAsync(
+        int page = 1, int pageSize = 10, string? search = null, string? status = null,
+        string? sortBy = null, bool sortDesc = false)
     {
-        _log.LogDebug("Processing list all subscriptions request");
-        var subscriptions = await _repo.GetAllAsync();
-        var responses = new List<SubscriptionResponse>();
+        _log.LogDebug("Processing paged subscriptions request (page {Page}, size {PageSize}, search '{Search}', status '{Status}')", page, pageSize, search, status);
 
-        foreach (var s in subscriptions)
+        var result = await _repo.GetAllPagedAsync(page, pageSize, search, status, sortBy, sortDesc);
+
+        // Lazy expiry: any active subscription past its period end is marked expired and synced to RADIUS
+        var responses = new List<SubscriptionResponse>(result.Items.Count);
+        foreach (var s in result.Items)
         {
-            // Resolve latest completed payment details for each subscription log
-            var payment = await _db.Payments
-                .Where(p => p.SubscriptionId == s.Id && p.Status == "Completed")
-                .OrderByDescending(p => p.CreatedAt)
-                .FirstOrDefaultAsync();
-
-            responses.Add(new SubscriptionResponse(
-                s.Id,
-                s.CustomerId,
-                s.PackageId,
-                s.Username,
-                s.Status,
-                s.CurrentPeriodStart,
-                s.CurrentPeriodEnd,
-                s.AutoRenew,
-                payment?.AmountCents ?? 0,
-                payment?.ReferenceNumber,
-                payment?.Status ?? "None"
-            ));
+            await ExpireIfDueAsync(s);
+            responses.Add(await BuildResponseAsync(s));
         }
 
-        _log.LogDebug("Fetched {Count} subscriptions", responses.Count);
-        return responses;
+        _log.LogDebug("Returning {Count}/{Total} subscriptions", responses.Count, result.TotalCount);
+        return new PaginatedResponse<SubscriptionResponse>
+        {
+            Items = responses,
+            TotalCount = result.TotalCount,
+            Page = result.Page,
+            PageSize = result.PageSize,
+        };
+    }
+
+    public async Task<SubscriptionStatsResponse> GetStatsAsync()
+    {
+        _log.LogDebug("Processing subscription stats request");
+        return await _repo.GetStatsAsync();
     }
 
     public async Task<List<SubscriptionResponse>> GetByCustomerIdAsync(int customerId)
@@ -69,24 +69,8 @@ public class SubscriptionService : ISubscriptionService
 
         foreach (var s in subscriptions)
         {
-            var payment = await _db.Payments
-                .Where(p => p.SubscriptionId == s.Id && p.Status == "Completed")
-                .OrderByDescending(p => p.CreatedAt)
-                .FirstOrDefaultAsync();
-
-            responses.Add(new SubscriptionResponse(
-                s.Id,
-                s.CustomerId,
-                s.PackageId,
-                s.Username,
-                s.Status,
-                s.CurrentPeriodStart,
-                s.CurrentPeriodEnd,
-                s.AutoRenew,
-                payment?.AmountCents ?? 0,
-                payment?.ReferenceNumber,
-                payment?.Status ?? "None"
-            ));
+            await ExpireIfDueAsync(s);
+            responses.Add(await BuildResponseAsync(s));
         }
 
         return responses;
@@ -102,24 +86,9 @@ public class SubscriptionService : ISubscriptionService
             throw new NotFoundException($"Subscription with ID {id} not found");
         }
 
-        var payment = await _db.Payments
-            .Where(p => p.SubscriptionId == s.Id && p.Status == "Completed")
-            .OrderByDescending(p => p.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        return new SubscriptionResponse(
-            s.Id,
-            s.CustomerId,
-            s.PackageId,
-            s.Username,
-            s.Status,
-            s.CurrentPeriodStart,
-            s.CurrentPeriodEnd,
-            s.AutoRenew,
-            payment?.AmountCents ?? 0,
-            payment?.ReferenceNumber,
-            payment?.Status ?? "None"
-        );
+        // Lazy expiry: mark expired + sync RADIUS reject rules once the period end has passed
+        await ExpireIfDueAsync(s);
+        return await BuildResponseAsync(s);
     }
 
     public async Task<SubscriptionResponse> CreateAsync(CreateSubscriptionRequest request)
@@ -143,12 +112,26 @@ public class SubscriptionService : ISubscriptionService
         if (customer.Status != "active")
             throw new ConflictException("Selected customer account status is designated inactive");
 
+        // 1b. Ensure PPPoE credentials exist (legacy customers may have none — auto-generate like customer creation)
+        if (string.IsNullOrWhiteSpace(customer.UsernamePpoe) || string.IsNullOrWhiteSpace(customer.PasswordPpoe))
+        {
+            _log.LogInformation("Customer {CustomerId} has no PPPoE credentials — auto-generating before subscription", customer.Id);
+            customer.UsernamePpoe = $"{customer.CustomerCode.ToLower().Replace("-", "")}_ppoe";
+            customer.PasswordPpoe = Guid.NewGuid().ToString()[..8].ToLower();
+            customer.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
         // 2. Validate package exists and is active
         var package = await _db.RadiusPackages.FindAsync(request.PackageId);
         if (package == null)
             throw new NotFoundException($"Package Plan with ID {request.PackageId} not found");
         if (!package.IsActive)
             throw new ConflictException("Selected package speed plan is currently inactive or suspended");
+
+        // 2b. Only one active subscription per customer at a time
+        if (await _repo.HasActiveSubscriptionForCustomerAsync(request.CustomerId))
+            throw new ConflictException("This customer already has an active subscription. Suspend or expire it before creating a new one.");
 
         // 3. Process payment through chosen gateway
         var method = request.PaymentMethod;
@@ -198,19 +181,7 @@ public class SubscriptionService : ISubscriptionService
         // 5. Submit to Repository for atomic execution
         var created = await _repo.CreateWithPaymentAsync(subscription, payment);
 
-        return new SubscriptionResponse(
-            created.Id,
-            created.CustomerId,
-            created.PackageId,
-            customer.UsernamePpoe,
-            created.Status,
-            created.CurrentPeriodStart,
-            created.CurrentPeriodEnd,
-            created.AutoRenew,
-            payment.AmountCents,
-            payment.ReferenceNumber,
-            payment.Status
-        );
+        return await BuildResponseAsync(created);
     }
 
     public async Task<SubscriptionResponse> CreateForCustomerUserAsync(int userId, CreateMySubscriptionRequest request)
@@ -292,23 +263,53 @@ public class SubscriptionService : ISubscriptionService
         // Persist updates and synchronize FreeRADIUS accounts
         await _repo.UpdateWithSyncAsync(subscription, oldUsername, oldPassword);
 
-        var payment = await _db.Payments
-            .Where(p => p.SubscriptionId == subscription.Id && p.Status == "Completed")
+        return await BuildResponseAsync(subscription);
+    }
+
+    /// <summary>Mark a subscription expired (and sync RADIUS reject rules) once its period end has passed.</summary>
+    private async Task ExpireIfDueAsync(Subscription s)
+    {
+        if (s.Status.Equals("active", StringComparison.OrdinalIgnoreCase) && s.CurrentPeriodEnd < DateTime.UtcNow)
+        {
+            _log.LogInformation("Subscription {SubId} for customer {CustomerId} is past period end — marking expired", s.Id, s.CustomerId);
+            var oldUsername = s.Username;
+            var oldPassword = s.Password;
+            s.Status = "expired";
+            s.UpdatedAt = DateTime.UtcNow;
+            await _repo.UpdateWithSyncAsync(s, oldUsername, oldPassword);
+        }
+    }
+
+    /// <summary>Build the enriched response (customer, plan, latest completed payment) for a subscription.</summary>
+    private async Task<SubscriptionResponse> BuildResponseAsync(Subscription s)
+    {
+        var customer = await _db.Customers.AsNoTracking()
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.Id == s.CustomerId);
+        var plan = await _db.RadiusPackages.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == s.PackageId);
+        var payment = await _db.Payments.AsNoTracking()
+            .Where(p => p.SubscriptionId == s.Id && p.Status == "Completed")
             .OrderByDescending(p => p.CreatedAt)
             .FirstOrDefaultAsync();
 
         return new SubscriptionResponse(
-            subscription.Id,
-            subscription.CustomerId,
-            subscription.PackageId,
-            subscription.Username,
-            subscription.Status,
-            subscription.CurrentPeriodStart,
-            subscription.CurrentPeriodEnd,
-            subscription.AutoRenew,
+            s.Id,
+            s.CustomerId,
+            s.PackageId,
+            s.Username,
+            s.Status,
+            s.CurrentPeriodStart,
+            s.CurrentPeriodEnd,
+            s.AutoRenew,
             payment?.AmountCents ?? 0,
             payment?.ReferenceNumber,
-            payment?.Status ?? "None"
+            payment?.Status ?? "None",
+            payment?.PaymentMethod,
+            payment?.CompletedAt,
+            customer?.User?.FullName ?? $"Customer #{s.CustomerId}",
+            customer?.CustomerCode ?? "",
+            plan?.Name ?? "Unknown plan"
         );
     }
 

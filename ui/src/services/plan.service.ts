@@ -7,8 +7,8 @@ export async function getPlans(): Promise<PlanSummary[]> {
   return res.data as PlanSummary[]
 }
 
-export async function getPlanDetail(id: number): Promise<PlanDetail> {
-  const res = await api.get(`/plans/${id}`)
+export async function getPlanDetail(id: number, subscribersCount = false): Promise<PlanDetail> {
+  const res = await api.get(`/plans/${id}`, { params: { subscribersCount } })
   return res.data as PlanDetail
 }
 

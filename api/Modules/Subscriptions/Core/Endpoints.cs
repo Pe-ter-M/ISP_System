@@ -13,12 +13,37 @@ public static class SubscriptionEndpoints
     {
         var group = app.MapGroup("/api/subscriptions").WithTags("Subscriptions");
 
-        // ── GET: All Active/Inactive Subscriptions (Admin only) ──
-        group.MapGet("/", async (ISubscriptionService service, ILogger<LoggerMarker> log) =>
+        // ── GET: Paginated Subscriptions (Admin) with search/filter/sort ──
+        group.MapGet("/", async (
+            int? page,
+            int? pageSize,
+            string? search,
+            string? status,
+            string? sortBy,
+            bool? sortDesc,
+            ISubscriptionService service,
+            ILogger<LoggerMarker> log) =>
         {
-            log.LogInformation("GET /api/subscriptions called");
-            var items = await service.GetAllAsync();
-            return ApiResponse.Success(items, $"Successfully retrieved {items.Count} subscriptions").ToResult();
+            page ??= 1;
+            pageSize ??= 10;
+            bool desc = sortDesc ?? false;
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 10;
+            if (pageSize > 100) pageSize = 100;
+
+            log.LogInformation("GET /api/subscriptions?page={Page}&size={PageSize}&search={Search}&status={Status}&sort={SortBy}&desc={SortDesc}", page, pageSize, search, status, sortBy, desc);
+            var result = await service.GetAllPagedAsync(page.Value, pageSize.Value, search, status, sortBy, desc);
+            log.LogInformation("Returning {Count}/{Total} subscriptions", result.Items.Count, result.TotalCount);
+            return ApiResponse.Success(result, $"Found {result.TotalCount} subscriptions").ToResult();
+        })
+        .RequirePermission(Permissions.SubscriptionsView);
+
+        // ── GET: Subscription stats (Admin) ──
+        group.MapGet("/stats", async (ISubscriptionService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("GET /api/subscriptions/stats called");
+            var stats = await service.GetStatsAsync();
+            return ApiResponse.Success(stats, "Subscription stats retrieved").ToResult();
         })
         .RequirePermission(Permissions.SubscriptionsView);
 

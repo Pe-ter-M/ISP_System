@@ -19,6 +19,7 @@ public class CustomerSummaryResponse
     public string UsernamePpoe { get; set; } = string.Empty;
     public string PasswordPpoe { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
+    public bool HasActiveSubscription { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { getAdminPlans, getPlanStats, getPlanDetail, createPlan, updatePlan, deletePlan } from '@/services/plan.service'
 import { formatPrice, formatSpeed, formatDuration } from '@/types/plan.types'
 import { useToastStore } from '@/stores/toast.store'
+import FieldTip from '@/components/FieldTip.vue'
 import type { PlanSummary, PlanDetail, CreatePlanPayload, UpdatePlanPayload } from '@/types/plan.types'
 
 const toast = useToastStore()
@@ -241,7 +242,7 @@ async function openEdit(p: PlanSummary) {
   formLoading.value = true
   showFormModal.value = true
   try {
-    const d = await getPlanDetail(p.id)
+    const d = await getPlanDetail(p.id, true)
     fillForm(d)
   } catch (e: unknown) {
     // Fall back to summary data so the form still opens
@@ -331,7 +332,7 @@ async function openDetail(p: PlanSummary) {
   detailLoading.value = true
   selectedPlan.value = null
   try {
-    selectedPlan.value = await getPlanDetail(p.id)
+    selectedPlan.value = await getPlanDetail(p.id, true)
   } catch {
     selectedPlan.value = null
   } finally {
@@ -625,7 +626,10 @@ function statusDot(active: boolean) {
           <form v-else @submit.prevent="submitForm" class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="sm:col-span-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan Name *</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Plan Name *</label>
+                  <FieldTip text="Public name customers see on the plans page. Must be unique." />
+                </div>
                 <input v-model="form.name" type="text" placeholder="Home Fibre 30"
                   class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                   :class="formValidation.name ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -633,13 +637,19 @@ function statusDot(active: boolean) {
               </div>
 
               <div class="sm:col-span-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                  <FieldTip text="Short description shown to customers on the public plans page." />
+                </div>
                 <textarea v-model="form.description" rows="2" placeholder="Short description shown to customers"
                   class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition resize-none"></textarea>
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Price (KES) *</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Price (KES) *</label>
+                  <FieldTip text="Amount customers pay each billing cycle, in Kenya Shillings. Stored as cents internally." />
+                </div>
                 <input v-model.number="form.priceKes" type="number" min="0" step="0.01" placeholder="1500"
                   class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                   :class="formValidation.priceKes ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -647,7 +657,10 @@ function statusDot(active: boolean) {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Billing Cycle</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Billing Cycle</label>
+                  <FieldTip text="How often the plan is billed: monthly, quarterly, semi-annual or yearly." />
+                </div>
                 <input v-model="form.billingCycle" list="billing-cycle-options" type="text" placeholder="monthly"
                   class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
                 <datalist id="billing-cycle-options">
@@ -656,7 +669,10 @@ function statusDot(active: boolean) {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Download (Mbps)</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Download (Mbps)</label>
+                  <FieldTip text="Maximum download speed. Leave 0 for an unlimited connection." />
+                </div>
                 <input v-model.number="form.downloadMbps" type="number" min="0" step="0.1" placeholder="30"
                   class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                   :class="formValidation.downloadMbps ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -664,7 +680,10 @@ function statusDot(active: boolean) {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Upload (Mbps)</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Upload (Mbps)</label>
+                  <FieldTip text="Maximum upload speed. Leave 0 for an unlimited connection." />
+                </div>
                 <input v-model.number="form.uploadMbps" type="number" min="0" step="0.1" placeholder="10"
                   class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                   :class="formValidation.uploadMbps ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -672,7 +691,10 @@ function statusDot(active: boolean) {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Devices *</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Max Devices *</label>
+                  <FieldTip text="How many devices can use the connection at once. Written to RADIUS as Simultaneous-Use." />
+                </div>
                 <input v-model.number="form.maxDevices" type="number" min="1" step="1" placeholder="3"
                   class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                   :class="formValidation.maxDevices ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -680,7 +702,10 @@ function statusDot(active: boolean) {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Session Timeout (hours)</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Session Timeout (hours)</label>
+                  <FieldTip text="Longest a connection stays up before RADIUS forces a disconnect. Default 24 hours." />
+                </div>
                 <input v-model.number="form.sessionTimeoutHours" type="number" min="0" step="1" placeholder="24"
                   class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                   :class="formValidation.sessionTimeoutHours ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -688,7 +713,10 @@ function statusDot(active: boolean) {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Idle Timeout (minutes)</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Idle Timeout (minutes)</label>
+                  <FieldTip text="Disconnects the session after this many minutes with no traffic. Default 10 minutes." />
+                </div>
                 <input v-model.number="form.idleTimeoutMinutes" type="number" min="0" step="1" placeholder="10"
                   class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                   :class="formValidation.idleTimeoutMinutes ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -696,7 +724,10 @@ function statusDot(active: boolean) {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort Order</label>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Sort Order</label>
+                  <FieldTip text="Lower numbers appear first on the public plans page and admin lists." />
+                </div>
                 <input v-model.number="form.sortOrder" type="number" step="1" placeholder="0"
                   class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
               </div>

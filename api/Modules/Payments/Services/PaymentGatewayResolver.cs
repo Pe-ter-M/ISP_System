@@ -28,4 +28,12 @@ public class PaymentGatewayResolver
         _log.LogDebug("Successfully matched provider gateway: {Provider}", gateway.Provider);
         return gateway;
     }
+
+    /// <summary>List the payment providers that are actually registered in this environment.</summary>
+    public IEnumerable<PaymentMethod> GetAvailableMethods()
+    {
+        var methods = _gateways.Select(g => g.Provider).Distinct().ToList();
+        _log.LogDebug("Exposing {Count} available payment methods", methods.Count);
+        return methods;
+    }
 }

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 using InternetProvider.Api.Modules.Subscriptions.Interfaces;
 using InternetProvider.Api.Modules.Subscriptions.Core.Models;
+using InternetProvider.Api.Modules.Subscriptions.Dtos;
 using InternetProvider.Api.Modules.Payments.Core.Models;
 using InternetProvider.Api.Modules.Radius.Core.Models;
 
@@ -18,12 +20,81 @@ public class SubscriptionRepository : ISubscriptionRepository
         _log = log;
     }
 
-    public async Task<List<Subscription>> GetAllAsync()
+    public async Task<PaginatedResponse<Subscription>> GetAllPagedAsync(
+        int page = 1, int pageSize = 10, string? search = null, string? status = null,
+        string? sortBy = null, bool sortDesc = false)
     {
-        _log.LogDebug("Fetching all subscriptions from database");
-        return await _db.Subscriptions
-            .OrderByDescending(s => s.CreatedAt)
+        _log.LogDebug("Fetching subscriptions page {Page} size {PageSize} search '{Search}' status '{Status}' sort {SortBy}", page, pageSize, search, status, sortBy);
+
+        var query = _db.Subscriptions.AsQueryable();
+
+        // ── Search (username, customer name/code, plan name) ──
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(s =>
+                s.Username.ToLower().Contains(term) ||
+                _db.Customers.Any(c => c.Id == s.CustomerId &&
+                    (c.User!.FullName.ToLower().Contains(term) || c.CustomerCode.ToLower().Contains(term))) ||
+                _db.RadiusPackages.Any(p => p.Id == s.PackageId && p.Name.ToLower().Contains(term)));
+        }
+
+        // ── Status filter ──
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var st = status.ToLower();
+            if (st is "active" or "suspended" or "expired")
+                query = query.Where(s => s.Status == st);
+        }
+
+        // ── Sort ──
+        query = (sortBy?.ToLower()) switch
+        {
+            "username" => sortDesc ? query.OrderByDescending(s => s.Username) : query.OrderBy(s => s.Username),
+            "status" => sortDesc ? query.OrderByDescending(s => s.Status) : query.OrderBy(s => s.Status),
+            "periodend" or "end" => sortDesc ? query.OrderByDescending(s => s.CurrentPeriodEnd) : query.OrderBy(s => s.CurrentPeriodEnd),
+            "created" => sortDesc ? query.OrderByDescending(s => s.CreatedAt) : query.OrderBy(s => s.CreatedAt),
+            "customer" => sortDesc
+                ? query.OrderByDescending(s => _db.Customers.Where(c => c.Id == s.CustomerId).Select(c => c.User!.FullName).FirstOrDefault())
+                : query.OrderBy(s => _db.Customers.Where(c => c.Id == s.CustomerId).Select(c => c.User!.FullName).FirstOrDefault()),
+            "plan" => sortDesc
+                ? query.OrderByDescending(s => _db.RadiusPackages.Where(p => p.Id == s.PackageId).Select(p => p.Name).FirstOrDefault())
+                : query.OrderBy(s => _db.RadiusPackages.Where(p => p.Id == s.PackageId).Select(p => p.Name).FirstOrDefault()),
+            _ => query.OrderByDescending(s => s.CreatedAt) // default: newest first
+        };
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
+
+        _log.LogDebug("Fetched {Count}/{Total} subscriptions (page {Page}, size {PageSize})", items.Count, totalCount, page, pageSize);
+        return new PaginatedResponse<Subscription>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<SubscriptionStatsResponse> GetStatsAsync()
+    {
+        _log.LogDebug("Computing subscription stats");
+        var total = await _db.Subscriptions.CountAsync();
+        var active = await _db.Subscriptions.CountAsync(s => s.Status == "active");
+        var suspended = await _db.Subscriptions.CountAsync(s => s.Status == "suspended");
+        var expired = await _db.Subscriptions.CountAsync(s => s.Status == "expired");
+
+        _log.LogDebug("Subscription stats: {Total} total, {Active} active, {Suspended} suspended, {Expired} expired", total, active, suspended, expired);
+        return new SubscriptionStatsResponse
+        {
+            Total = total,
+            Active = active,
+            Suspended = suspended,
+            Expired = expired,
+        };
     }
 
     public async Task<List<Subscription>> GetByCustomerIdAsync(int customerId)

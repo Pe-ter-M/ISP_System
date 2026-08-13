@@ -18,7 +18,7 @@ public class CustomerRepository : ICustomerRepository
         _log = log;
     }
 
-    public async Task<PaginatedResponse<Customer>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc)
+    public async Task<PaginatedResponse<Customer>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc, string? subscription = null)
     {
         var query = _db.Customers.Include(c => c.User).AsNoTracking().AsQueryable();
 
@@ -31,6 +31,16 @@ public class CustomerRepository : ICustomerRepository
                 c.User!.Email.ToLower().Contains(term) ||
                 (c.User!.Phone != null && c.User!.Phone.Contains(term)) ||
                 (c.City != null && c.City.ToLower().Contains(term)));
+        }
+
+        // ── Subscription filter (all | none | active) ──
+        if (!string.IsNullOrWhiteSpace(subscription))
+        {
+            var sub = subscription.ToLower();
+            if (sub == "none")
+                query = query.Where(c => !_db.Subscriptions.Any(s => s.CustomerId == c.Id && s.Status == "active"));
+            else if (sub == "active")
+                query = query.Where(c => _db.Subscriptions.Any(s => s.CustomerId == c.Id && s.Status == "active"));
         }
 
         query = (sortBy?.ToLower()) switch

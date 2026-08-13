@@ -10,6 +10,7 @@ export interface CustomerSummary {
   city: string | null
   region: string | null
   status: string
+  hasActiveSubscription?: boolean
   createdAt: string
 }
 

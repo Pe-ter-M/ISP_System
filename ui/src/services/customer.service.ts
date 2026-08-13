@@ -19,11 +19,13 @@ export async function getCustomers(
   search?: string,
   sortBy?: string,
   sortDesc = false,
+  subscription?: 'all' | 'none' | 'active',
 ): Promise<PaginatedCustomers> {
   const params: Record<string, string | number | boolean> = { page, pageSize }
   if (search) params.search = search
   if (sortBy) params.sortBy = sortBy
   if (sortDesc) params.sortDesc = true
+  if (subscription && subscription !== 'all') params.subscription = subscription
 
   const res = await api.get('/customers', { params })
   return res.data as PaginatedCustomers

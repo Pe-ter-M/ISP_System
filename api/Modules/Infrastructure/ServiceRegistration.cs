@@ -4,6 +4,7 @@ using InternetProvider.Api.Modules.Users.Core;
 using InternetProvider.Api.Modules.Customers.Core;
 using InternetProvider.Api.Modules.Plans.Core;
 using InternetProvider.Api.Modules.Subscriptions.Core;
+using InternetProvider.Api.Modules.Payments.Core;
 using InternetProvider.Api.Modules.Radius.Core;
 using InternetProvider.Api.Modules.Nas.Core;
 using InternetProvider.Api.Modules.RadAcct.Core;
@@ -25,6 +26,7 @@ public static class ServiceRegistration
         CustomerEndpoints.Map(app);
         PlanEndpoints.Map(app);
         SubscriptionEndpoints.Map(app);
+        PaymentsEndpoints.Map(app);
         RadiusEndpoints.Map(app);
         NasEndpoints.Map(app);
         RadAcctEndpoints.Map(app);
