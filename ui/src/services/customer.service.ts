@@ -11,6 +11,8 @@ export interface CreateCustomerPayload {
   serviceAddress: string | null
   city: string | null
   region: string | null
+  gpsLat: number | null
+  gpsLng: number | null
 }
 
 export interface UpdateCustomerPayload {

@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { getCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer } from '@/services/customer.service'
 import { useToastStore } from '@/stores/toast.store'
 import FieldTip from '@/components/FieldTip.vue'
+import { reverseGeocode } from '@/services/geocode.service'
+import type { ReverseGeocodeResult } from '@/services/geocode.service'
 import type { CustomerSummary, CustomerDetail } from '@/types/customer.types'
 import type { CreateCustomerPayload, UpdateCustomerPayload } from '@/services/customer.service'
+
+// Lazy-loaded so maplibre-gl only loads when a map is actually shown
+const MapView = defineAsyncComponent(() => import('@/components/MapView.vue'))
 
 const toast = useToastStore()
 
@@ -41,6 +46,8 @@ const createForm = ref({
   serviceAddress: '',
   city: '',
   region: '',
+  gpsLat: null as number | null,
+  gpsLng: null as number | null,
 })
 
 // Edit modal
@@ -70,6 +77,14 @@ const showDelete = ref(false)
 const deleteTarget = ref<CustomerSummary | null>(null)
 const deleteLoading = ref(false)
 const deleteError = ref('')
+
+// Location (map) state
+const locationBusy = ref(false)
+const locationError = ref('')
+const resolvedAddress = ref('')
+const editResolvedAddress = ref('')
+const detailLocation = ref<ReverseGeocodeResult | null>(null)
+const detailLocationLoading = ref(false)
 
 // ── Computed ──
 const pageNumbers = computed(() => {
@@ -158,12 +173,79 @@ function friendlyDate(iso: string | null | undefined): string {
   return `${day}${suffix} ${month} ${d.getFullYear()}`
 }
 
+// ── Location (map) helpers ──
+interface LocationForm {
+  gpsLat: number | null
+  gpsLng: number | null
+  city: string
+  region: string
+}
+
+async function fillFromGeocode(lat: number, lng: number, form: LocationForm, mode: 'create' | 'edit') {
+  const result = await reverseGeocode(lat, lng)
+  if (mode === 'create') resolvedAddress.value = result?.displayName ?? ''
+  else editResolvedAddress.value = result?.displayName ?? ''
+  if (result) {
+    // A map pick is authoritative: keep city/region in sync with the picked location
+    // (a later pick must replace values from an earlier pick, not keep them)
+    form.city = result.city ?? ''
+    form.region = result.region ?? ''
+  } else {
+    // Could not resolve the picked point — never leave stale values from a previous location
+    form.city = ''
+    form.region = ''
+  }
+}
+
+async function handleMapSelect(mode: 'create' | 'edit', { lat, lng }: { lat: number; lng: number }) {
+  const form = mode === 'create' ? createForm.value : editForm.value
+  form.gpsLat = Number(lat.toFixed(6))
+  form.gpsLng = Number(lng.toFixed(6))
+  await fillFromGeocode(lat, lng, form, mode)
+}
+
+function useCurrentLocation(mode: 'create' | 'edit') {
+  const form = mode === 'create' ? createForm.value : editForm.value
+  locationBusy.value = true
+  locationError.value = ''
+  if (!('geolocation' in navigator)) {
+    locationError.value = 'Geolocation is not available in this browser'
+    locationBusy.value = false
+    return
+  }
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude, longitude } = pos.coords
+      form.gpsLat = Number(latitude.toFixed(6))
+      form.gpsLng = Number(longitude.toFixed(6))
+      await fillFromGeocode(latitude, longitude, form, mode)
+      locationBusy.value = false
+    },
+    (err) => {
+      locationError.value = err.message || 'Could not get your current location'
+      locationBusy.value = false
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+  )
+}
+
+function clearLocation(mode: 'create' | 'edit') {
+  const form = mode === 'create' ? createForm.value : editForm.value
+  form.gpsLat = null
+  form.gpsLng = null
+  if (mode === 'create') resolvedAddress.value = ''
+  else editResolvedAddress.value = ''
+}
+
 // ── Create Customer ──
 function resetCreateForm() {
   createForm.value = {
     fullName: '', email: '', password: '', phone: '',
     customerType: 'residential', businessName: '', serviceAddress: '', city: '', region: '',
+    gpsLat: null, gpsLng: null,
   }
+  resolvedAddress.value = ''
+  locationError.value = ''
 }
 
 function openCreate() {
@@ -200,6 +282,8 @@ async function handleCreate() {
     serviceAddress: createForm.value.serviceAddress.trim() || null,
     city: createForm.value.city.trim() || null,
     region: createForm.value.region.trim() || null,
+    gpsLat: createForm.value.gpsLat,
+    gpsLng: createForm.value.gpsLng,
   }
 
   const temp: CustomerSummary = {
@@ -241,8 +325,17 @@ async function openDetail(c: CustomerSummary) {
   showDetail.value = true
   detailLoading.value = true
   selectedCustomer.value = null
+  detailLocation.value = null
+  detailLocationLoading.value = false
   try {
-    selectedCustomer.value = await getCustomerById(c.id)
+    const d = await getCustomerById(c.id)
+    selectedCustomer.value = d
+    if (d.gpsLat !== null && d.gpsLng !== null) {
+      detailLocationLoading.value = true
+      reverseGeocode(d.gpsLat, d.gpsLng)
+        .then(r => { detailLocation.value = r })
+        .finally(() => { detailLocationLoading.value = false })
+    }
   } catch (e: unknown) {
     selectedCustomer.value = null
     toast.error(errMsg(e, 'Failed to load customer details'))
@@ -253,6 +346,8 @@ async function openDetail(c: CustomerSummary) {
 function closeDetail() {
   showDetail.value = false
   selectedCustomer.value = null
+  detailLocation.value = null
+  detailLocationLoading.value = false
 }
 
 // ── Edit ──
@@ -277,6 +372,8 @@ async function openEdit(c: CustomerSummary) {
   editingId.value = c.id
   editError.value = ''
   editValidation.value = {}
+  editResolvedAddress.value = ''
+  locationError.value = ''
   editLoading.value = true
   showEditModal.value = true
   try {
@@ -638,11 +735,53 @@ function cancelDelete() {
               <div>
                 <div class="flex items-center gap-1.5 mb-1">
                   <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Region</label>
-                  <FieldTip text="County or region." />
+                  <FieldTip text="County or region. Auto-filled from the map location when available." />
                 </div>
                 <input v-model="createForm.region" type="text" placeholder="Nairobi County"
                   class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
               </div>
+            </div>
+
+            <!-- Location (map) -->
+            <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div class="flex items-center gap-1.5">
+                  <p class="text-sm font-semibold text-gray-700 dark:text-gray-300">Location</p>
+                  <FieldTip text="Pin the customer home on the map. Use your current location for the best accuracy, search for an address, or click the map to set it manually. City and region auto-fill when available." />
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" @click="useCurrentLocation('create')" :disabled="locationBusy"
+                    class="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
+                    <span v-if="locationBusy" class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Use my location
+                  </button>
+                  <button v-if="createForm.gpsLat !== null" type="button" @click="clearLocation('create')"
+                    class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <MapView
+                :lat="createForm.gpsLat"
+                :lng="createForm.gpsLng"
+                interactive
+                searchable
+                fullscreenable
+                :height="'220px'"
+                @select="handleMapSelect('create', $event)"
+              />
+
+              <p v-if="createForm.gpsLat !== null && createForm.gpsLng !== null" class="mt-2 text-xs text-gray-500 dark:text-gray-400 font-mono break-words">
+                {{ Number(createForm.gpsLat).toFixed(6) }}, {{ Number(createForm.gpsLng).toFixed(6) }}
+                <span v-if="resolvedAddress" class="text-gray-400 dark:text-gray-500">— {{ resolvedAddress }}</span>
+              </p>
+              <p v-else class="mt-2 text-xs text-gray-400 dark:text-gray-500">No location set yet — click the map or use your current location.</p>
+              <p v-if="locationError" class="mt-2 text-xs text-red-500">{{ locationError }}</p>
             </div>
 
             <p v-if="createError" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{{ createError }}</p>
@@ -775,22 +914,68 @@ function cancelDelete() {
                   class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
               </div>
 
-              <div>
-                <div class="flex items-center gap-1.5 mb-1">
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">GPS Latitude</label>
-                  <FieldTip text="Optional GPS coordinates for site visits and mapping." />
+              <div class="sm:col-span-2">
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                  <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                    <div class="flex items-center gap-1.5">
+                      <p class="text-sm font-semibold text-gray-700 dark:text-gray-300">Location</p>
+                      <FieldTip text="Pin the customer home on the map. Use your current location for the best accuracy, search for an address, or click the map to set it manually." />
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button type="button" @click="useCurrentLocation('edit')" :disabled="locationBusy"
+                        class="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
+                        <span v-if="locationBusy" class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Use my location
+                      </button>
+                      <button v-if="editForm.gpsLat !== null" type="button" @click="clearLocation('edit')"
+                        class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <MapView
+                    :lat="editForm.gpsLat"
+                    :lng="editForm.gpsLng"
+                    interactive
+                    searchable
+                    fullscreenable
+                    confirm-update
+                    :height="'220px'"
+                    @select="handleMapSelect('edit', $event)"
+                  />
+
+                  <p v-if="editForm.gpsLat !== null && editForm.gpsLng !== null" class="mt-2 text-xs text-gray-500 dark:text-gray-400 font-mono break-words">
+                    {{ Number(editForm.gpsLat).toFixed(6) }}, {{ Number(editForm.gpsLng).toFixed(6) }}
+                    <span v-if="editResolvedAddress" class="text-gray-400 dark:text-gray-500">— {{ editResolvedAddress }}</span>
+                  </p>
+                  <p v-else class="mt-2 text-xs text-gray-400 dark:text-gray-500">No location set yet — click the map or use your current location.</p>
+                  <p v-if="locationError" class="mt-2 text-xs text-red-500">{{ locationError }}</p>
                 </div>
-                <input v-model.number="editForm.gpsLat" type="number" step="any" placeholder="-1.2921"
-                  class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
               </div>
 
-              <div>
-                <div class="flex items-center gap-1.5 mb-1">
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">GPS Longitude</label>
-                  <FieldTip text="Optional GPS coordinates for site visits and mapping." />
+              <!-- Fine-tune inputs kept alongside the map -->
+              <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">GPS Latitude</label>
+                    <FieldTip text="Fine-tune the coordinates captured from the map." />
+                  </div>
+                  <input v-model.number="editForm.gpsLat" type="number" step="any" placeholder="-1.2921"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
                 </div>
-                <input v-model.number="editForm.gpsLng" type="number" step="any" placeholder="36.8219"
-                  class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                <div>
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">GPS Longitude</label>
+                    <FieldTip text="Fine-tune the coordinates captured from the map." />
+                  </div>
+                  <input v-model.number="editForm.gpsLng" type="number" step="any" placeholder="36.8219"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                </div>
               </div>
 
               <div class="sm:col-span-2">
@@ -887,9 +1072,19 @@ function cancelDelete() {
                   <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Region</p>
                   <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ selectedCustomer.region || '—' }}</p>
                 </div>
-                <div v-if="selectedCustomer.gpsLat !== null" class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 col-span-2">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">GPS</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm font-mono">{{ selectedCustomer.gpsLat }}, {{ selectedCustomer.gpsLng }}</p>
+                <div class="col-span-2">
+                  <MapView
+                    v-if="selectedCustomer.gpsLat !== null && selectedCustomer.gpsLng !== null"
+                    :lat="selectedCustomer.gpsLat"
+                    :lng="selectedCustomer.gpsLng"
+                    :height="'200px'"
+                  />
+                  <p v-if="detailLocationLoading" class="mt-2 text-xs text-gray-400 dark:text-gray-500">Resolving location…</p>
+                  <p v-else-if="detailLocation && detailLocation.displayName" class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ detailLocation.displayName }}</p>
+                  <p v-else-if="selectedCustomer.gpsLat !== null" class="mt-2 text-xs text-gray-400 dark:text-gray-500 font-mono">
+                    {{ Number(selectedCustomer.gpsLat).toFixed(6) }}, {{ Number(selectedCustomer.gpsLng).toFixed(6) }}
+                  </p>
+                  <p v-else class="mt-2 text-xs text-gray-400 dark:text-gray-500">No location set for this customer.</p>
                 </div>
               </div>
             </div>
