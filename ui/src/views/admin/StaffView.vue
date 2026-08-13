@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff, getStaffStats } from '@/services/staff.service'
-import { getRoles } from '@/services/role.service'
+import { getRoles, getRolePermissions } from '@/services/role.service'
+import { getUserById, getPermissions, updateUserPermissions } from '@/services/user.service'
 import { formatPrice } from '@/types/plan.types'
 import { useToastStore } from '@/stores/toast.store'
 import FieldTip from '@/components/FieldTip.vue'
 import type { StaffSummary } from '@/types/staff.types'
 import type { CreateStaffPayload, UpdateStaffPayload } from '@/types/staff.types'
 import type { Role } from '@/types/role.types'
+import type { Permission, PermissionOverride } from '@/types/user.types'
 
 const toast = useToastStore()
 
@@ -290,6 +292,7 @@ async function openDetail(s: StaffSummary) {
   selectedStaff.value = null
   try {
     selectedStaff.value = await getStaffById(s.id)
+    await ensurePermsLoaded(selectedStaff.value)
   } catch (e: unknown) {
     selectedStaff.value = null
     toast.error(errMsg(e, 'Failed to load staff details'))
@@ -300,6 +303,7 @@ async function openDetail(s: StaffSummary) {
 function closeDetail() {
   showDetail.value = false
   selectedStaff.value = null
+  permsExpanded.value = false
 }
 
 // ── Edit ──
@@ -346,6 +350,26 @@ function closeEdit() {
   editingId.value = null
 }
 
+// ── Role permission preview (edit modal) — reflects the selected role's defaults ──
+const rolePreview = ref<{ roleName: string; codes: string[] } | null>(null)
+let rolePreviewTimer: ReturnType<typeof setTimeout> | null = null
+watch(() => editForm.value.roleId, async (roleId) => {
+  if (rolePreviewTimer) clearTimeout(rolePreviewTimer)
+  if (!roleId) {
+    rolePreview.value = null
+    return
+  }
+  rolePreviewTimer = setTimeout(async () => {
+    try {
+      const perms = await getRolePermissions(roleId)
+      const roleName = staffRoles.value.find(r => r.id === roleId)?.name ?? 'role'
+      rolePreview.value = { roleName, codes: perms.map(p => p.code) }
+    } catch {
+      rolePreview.value = null
+    }
+  }, 200)
+})
+
 function validateEditForm(): boolean {
   const v: Record<string, string> = {}
   if (!editForm.value.fullName.trim()) v.fullName = 'Full name is required'
@@ -385,6 +409,147 @@ async function handleEdit() {
     toast.error(editError.value)
   } finally {
     editSaving.value = false
+  }
+}
+
+// ── Permissions (view + edit) ──
+const showPermsModal = ref(false)
+const permsLoading = ref(false)
+const permsSaving = ref(false)
+const permsError = ref('')
+const permsStaff = ref<StaffSummary | null>(null)
+const allPermissions = ref<Permission[]>([])
+const roleDefaultCodes = ref<Set<string>>(new Set())
+const effectivePerms = ref<Record<string, boolean>>({})
+const permOverrides = ref<PermissionOverride[]>([])
+const permsLoadedFor = ref<number | null>(null)
+const detailPermsLoading = ref(false)
+/** Permissions section starts collapsed; edit controls appear only when expanded */
+const permsExpanded = ref(false)
+
+/** Load the master permission list + the role defaults + this user's overrides */
+async function ensurePermsLoaded(s: StaffSummary) {
+  if (permsLoadedFor.value === s.id && allPermissions.value.length > 0) return
+  permsLoading.value = true
+  detailPermsLoading.value = true
+  try {
+    const [perms, rolePerms, userDetail] = await Promise.all([
+      getPermissions(),
+      getRolePermissions(s.roleId),
+      getUserById(s.userId),
+    ])
+    allPermissions.value = perms
+    roleDefaultCodes.value = new Set(rolePerms.map(p => p.code))
+    const eff = new Set(userDetail.permissions ?? [])
+    const map: Record<string, boolean> = {}
+    for (const p of perms) map[p.code] = eff.has(p.code)
+    effectivePerms.value = map
+    permOverrides.value = userDetail.permissionOverrides ?? []
+    permsLoadedFor.value = s.id
+  } catch (e: unknown) {
+    permsError.value = errMsg(e, 'Failed to load permissions')
+  } finally {
+    permsLoading.value = false
+    detailPermsLoading.value = false
+  }
+}
+
+/** Visual state of one permission: granted by role, extra (added), revoked (default disabled), or off */
+function permState(code: string): 'role' | 'extra' | 'revoked' | 'off' {
+  const on = effectivePerms.value[code] ?? false
+  const inRole = roleDefaultCodes.value.has(code)
+  if (inRole && on) return 'role'
+  if (!inRole && on) return 'extra'
+  if (inRole && !on) return 'revoked'
+  return 'off'
+}
+
+function permChipClass(state: 'role' | 'extra' | 'revoked' | 'off'): string {
+  switch (state) {
+    case 'role': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+    case 'extra': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 ring-1 ring-blue-400/60 dark:ring-blue-700'
+    case 'revoked': return 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 line-through'
+    default: return 'bg-gray-100 text-gray-400 dark:bg-gray-800/60 dark:text-gray-600'
+  }
+}
+
+const permGroups = computed(() => {
+  const groups = new Map<string, Permission[]>()
+  for (const p of allPermissions.value) {
+    const g = p.group || 'other'
+    if (!groups.has(g)) groups.set(g, [])
+    groups.get(g)!.push(p)
+  }
+  return [...groups.entries()].map(([name, items]) => ({ name, items }))
+})
+
+const permCounts = computed(() => {
+  let granted = 0
+  let extra = 0
+  let revoked = 0
+  for (const p of allPermissions.value) {
+    const st = permState(p.code)
+    if (st === 'role' || st === 'extra') granted++
+    if (st === 'extra') extra++
+    if (st === 'revoked') revoked++
+  }
+  return { granted, extra, revoked, total: allPermissions.value.length }
+})
+
+function shortCode(code: string): string {
+  const parts = code.split('.')
+  return parts.length > 1 ? parts[1]! : code
+}
+
+function togglePerm(code: string) {
+  effectivePerms.value[code] = !(effectivePerms.value[code] ?? false)
+}
+
+function resetPermsToRole() {
+  const map: Record<string, boolean> = {}
+  for (const p of allPermissions.value) map[p.code] = roleDefaultCodes.value.has(p.code)
+  effectivePerms.value = map
+}
+
+/** Diff the effective state against the role defaults — only deviations become overrides */
+function computeOverrides(): PermissionOverride[] {
+  const out: PermissionOverride[] = []
+  for (const p of allPermissions.value) {
+    const on = effectivePerms.value[p.code] ?? false
+    const inRole = roleDefaultCodes.value.has(p.code)
+    if (on !== inRole) out.push({ code: p.code, isGranted: on })
+  }
+  return out
+}
+
+async function openPermsEditor(s: StaffSummary) {
+  permsStaff.value = s
+  permsError.value = ''
+  showPermsModal.value = true
+  await ensurePermsLoaded(s)
+}
+
+function closePermsModal() {
+  if (permsSaving.value) return
+  showPermsModal.value = false
+  permsStaff.value = null
+}
+
+async function savePerms() {
+  if (!permsStaff.value) return
+  permsSaving.value = true
+  permsError.value = ''
+  try {
+    await updateUserPermissions(permsStaff.value.userId, computeOverrides())
+    permsLoadedFor.value = null // force a fresh load next time
+    toast.success(`Permissions updated for ${permsStaff.value.fullName}`)
+    showPermsModal.value = false
+    permsStaff.value = null
+  } catch (e: unknown) {
+    permsError.value = errMsg(e, 'Failed to save permissions')
+    toast.error(permsError.value)
+  } finally {
+    permsSaving.value = false
   }
 }
 
@@ -744,6 +909,20 @@ function cancelDelete() {
                 </select>
               </div>
 
+              <!-- Role permission preview — updates with the selected role -->
+              <div v-if="rolePreview" class="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
+                <p class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                  <span class="capitalize">{{ rolePreview.roleName }}</span> role grants
+                  <span class="font-bold text-blue-600 dark:text-blue-400">{{ rolePreview.codes.length }}</span> permissions
+                  <span class="text-gray-400 dark:text-gray-500">— user-level overrides still apply.</span>
+                </p>
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                  <span v-for="c in rolePreview.codes.slice(0, 12)" :key="c"
+                    class="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-medium">{{ shortCode(c) }}</span>
+                  <span v-if="rolePreview.codes.length > 12" class="text-[10px] text-gray-400 self-center">+{{ rolePreview.codes.length - 12 }} more</span>
+                </div>
+              </div>
+
               <div>
                 <div class="flex items-center gap-1.5 mb-1">
                   <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Full Name *</label>
@@ -904,11 +1083,132 @@ function cancelDelete() {
               </div>
               <p v-if="selectedStaff.notes" class="mt-3 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2"><span class="font-semibold text-gray-600 dark:text-gray-300">Notes: </span>{{ selectedStaff.notes }}</p>
             </div>
+
+            <!-- Permissions (collapsed by default — expand to view and edit) -->
+            <div>
+              <button type="button" @click="permsExpanded = !permsExpanded"
+                class="w-full flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-4 py-3 transition hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+                <span class="flex items-center gap-2.5">
+                  <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="permsExpanded ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Permissions</span>
+                </span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  <span v-if="detailPermsLoading">Loading…</span>
+                  <template v-else>
+                    {{ permCounts.granted }}/{{ permCounts.total }} granted
+                    <span v-if="permCounts.extra > 0" class="text-blue-600 dark:text-blue-400"> · {{ permCounts.extra }} extra</span>
+                    <span v-if="permCounts.revoked > 0" class="text-gray-400 dark:text-gray-500"> · {{ permCounts.revoked }} revoked</span>
+                  </template>
+                </span>
+              </button>
+
+              <div v-if="permsExpanded" class="mt-3">
+                <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                  <!-- Legend -->
+                  <div class="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400">
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Role</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span> Extra</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span> Revoked</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button @click="openPermsEditor(selectedStaff)"
+                      class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
+                      Edit permissions
+                    </button>
+                    <button @click="permsExpanded = false"
+                      class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer whitespace-nowrap">
+                      Collapse
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="detailPermsLoading" class="text-xs text-gray-400 dark:text-gray-500 py-2">Loading permissions…</div>
+                <div v-else class="space-y-3">
+                  <div v-for="g in permGroups" :key="g.name" class="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3">
+                    <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 capitalize">{{ g.name }}</p>
+                    <div class="flex flex-wrap gap-1.5 mt-2">
+                      <span v-for="p in g.items" :key="p.code" :title="p.description"
+                        class="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                        :class="permChipClass(permState(p.code))">
+                        {{ shortCode(p.code) }}
+                        <span v-if="permState(p.code) === 'extra'" class="font-bold">+</span>
+                        <span v-if="permState(p.code) === 'revoked'">✕</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div v-else class="p-8 text-center">
             <p class="text-red-500 dark:text-red-400">Failed to load staff details.</p>
             <button @click="closeDetail" class="mt-4 text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">Close</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── Permissions Modal ── -->
+    <Teleport to="body">
+      <div v-if="showPermsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closePermsModal">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closePermsModal"></div>
+        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-modal-in p-6">
+          <div class="flex items-center justify-between mb-1">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">Edit Permissions</h2>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                {{ permsStaff?.fullName }} · <span class="capitalize">{{ permsStaff?.roleName }}</span> · {{ permsStaff?.staffCode }}
+              </p>
+            </div>
+            <button @click="closePermsModal" :disabled="permsSaving"
+              class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm disabled:opacity-40">✕</button>
+          </div>
+
+          <!-- Legend -->
+          <div class="flex flex-wrap items-center gap-3 mt-3 mb-4 text-[11px] text-gray-500 dark:text-gray-400">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Granted by role</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span> Extra (added)</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span> Revoked (default disabled)</span>
+            <span class="ml-auto font-medium">{{ permCounts.granted }}/{{ permCounts.total }} granted · {{ permCounts.extra }} extra · {{ permCounts.revoked }} revoked</span>
+          </div>
+
+          <div v-if="permsLoading" class="flex justify-center py-16">
+            <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+
+          <div v-else class="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+            <div v-for="g in permGroups" :key="g.name" class="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3">
+              <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 capitalize mb-2">{{ g.name }}</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button v-for="p in g.items" :key="p.code" type="button" @click="togglePerm(p.code)" :title="p.description"
+                  class="px-2 py-1 rounded-full text-[11px] font-medium transition cursor-pointer hover:opacity-80"
+                  :class="permChipClass(permState(p.code))">
+                  {{ shortCode(p.code) }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p v-if="permsError" class="mt-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{{ permsError }}</p>
+
+          <div class="flex gap-3 mt-5">
+            <button type="button" @click="resetPermsToRole" :disabled="permsSaving"
+              class="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer disabled:opacity-40">
+              Reset to role
+            </button>
+            <div class="flex-1"></div>
+            <button type="button" @click="closePermsModal" :disabled="permsSaving"
+              class="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer disabled:opacity-40">
+              Cancel
+            </button>
+            <button type="button" @click="savePerms" :disabled="permsSaving"
+              class="px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+              <span v-if="permsSaving" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              Save Permissions
+            </button>
           </div>
         </div>
       </div>
