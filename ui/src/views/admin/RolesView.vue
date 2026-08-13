@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { getRoles, createRole, deleteRole, getRolePermissions, setRolePermissions } from '@/services/role.service'
 import { getPermissions } from '@/services/user.service'
+import FieldTip from '@/components/FieldTip.vue'
 import type { Role, RolePermission } from '@/types/role.types'
 import type { Permission } from '@/types/user.types'
 
@@ -324,7 +325,10 @@ const roleBadgeClass = (name: string) => ({
 
           <form @submit.prevent="handleCreate" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role Name *</label>
+              <div class="flex items-center gap-1.5 mb-1">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Role Name *</label>
+                <FieldTip text="The name of the role, shown when assigning users. Must be unique." />
+              </div>
               <input
                 v-model="createName"
                 type="text"
@@ -336,7 +340,10 @@ const roleBadgeClass = (name: string) => ({
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+              <div class="flex items-center gap-1.5 mb-1">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                <FieldTip text="Short description of what this role is for, e.g. handles billing and support." />
+              </div>
               <input
                 v-model="createDescription"
                 type="text"
@@ -447,9 +454,10 @@ const roleBadgeClass = (name: string) => ({
                 <!-- Permission chips grouped -->
                 <div v-else class="space-y-4">
                   <div class="flex items-center justify-between">
-                    <p class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                       Assigned Permissions
-                      <span class="ml-1.5 text-xs font-normal text-gray-400">{{ rolePerms.size }} total</span>
+                      <span class="text-xs font-normal text-gray-400">{{ rolePerms.size }} total</span>
+                      <FieldTip text="The permissions this role grants. They control what users with this role can see and do across the system." />
                     </p>
                     <button
                       v-if="allPermissions.length > 0"
@@ -475,7 +483,10 @@ const roleBadgeClass = (name: string) => ({
 
                 <!-- Legend -->
                 <div class="rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 px-4 py-3">
-                  <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Click any permission to toggle it</p>
+                  <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    Click any permission to toggle it
+                    <FieldTip text="Permissions are grouped by module. Green chips are assigned to this role, grey ones are not. Hover any chip for its description." />
+                  </p>
                   <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-600 dark:text-gray-400">
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>Assigned to role</span>
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>Not assigned</span>
