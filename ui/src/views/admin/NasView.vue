@@ -47,7 +47,6 @@ const deleteError = ref('')
 const form = ref({
   nasname: '',
   shortname: '',
-  type: 'other',
   ports: null as number | null,
   secret: '',
   server: '',
@@ -55,7 +54,15 @@ const form = ref({
   description: '',
 })
 
-const nasTypes = ['other', 'cisco', 'mikrotik', 'huawei', 'ubiquiti', 'juniper']
+// Known NAS vendor types for the dropdown; "Other" opens a free-text field for custom vendors
+const nasTypes = ['other', 'cisco', 'mikrotik', 'huawei', 'ubiquiti', 'juniper', 'zte', 'nokia', 'tp-link', 'cambium', 'radwin']
+const typeOptions = nasTypes.filter(t => t !== 'other')
+const typeSelect = ref('other')
+const typeCustom = ref('')
+
+const resolvedType = computed(() =>
+  typeSelect.value === 'other' ? (typeCustom.value.trim() || 'other') : typeSelect.value,
+)
 
 // ── Computed ──
 const pageNumbers = computed(() => {
@@ -148,6 +155,11 @@ function typeClass(type: string): string {
     case 'huawei': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
     case 'ubiquiti': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
     case 'juniper': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+    case 'zte': return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+    case 'nokia': return 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+    case 'tp-link': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+    case 'cambium': return 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
+    case 'radwin': return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'
     default: return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
   }
 }
@@ -155,21 +167,30 @@ function typeClass(type: string): string {
 // ── Form helpers ──
 function resetForm() {
   form.value = {
-    nasname: '', shortname: '', type: 'other', ports: null,
+    nasname: '', shortname: '', ports: null,
     secret: '', server: '', community: '', description: '',
   }
+  typeSelect.value = 'other'
+  typeCustom.value = ''
 }
 
 function fillForm(n: NasClient) {
   form.value = {
     nasname: n.nasname,
     shortname: n.shortname,
-    type: n.type,
     ports: n.ports,
     secret: '', // never returned by the API — blank keeps the existing secret on update
     server: n.server ?? '',
     community: n.community ?? '',
     description: n.description ?? '',
+  }
+  // Preserve custom vendor types via the "Other" free-text field
+  if (n.type === 'other' || typeOptions.includes(n.type)) {
+    typeSelect.value = n.type
+    typeCustom.value = ''
+  } else {
+    typeSelect.value = 'other'
+    typeCustom.value = n.type
   }
 }
 
@@ -177,7 +198,6 @@ function validateForm(): boolean {
   const v: Record<string, string> = {}
   if (!form.value.nasname.trim()) v.nasname = 'NAS name is required'
   if (!form.value.shortname.trim()) v.shortname = 'Short name is required'
-  if (!form.value.type.trim()) v.type = 'Type is required'
   if (formMode.value === 'create' && !form.value.secret.trim()) v.secret = 'Secret is required'
   if (toNum(form.value.ports) < 0) v.ports = 'Ports cannot be negative'
   formValidation.value = v
@@ -188,7 +208,7 @@ function buildPayload(): CreateNasPayload | UpdateNasPayload {
   const base = {
     nasname: form.value.nasname.trim(),
     shortname: form.value.shortname.trim(),
-    type: form.value.type.trim(),
+    type: resolvedType.value,
     ports: form.value.ports !== null && form.value.ports !== undefined ? Math.round(toNum(form.value.ports)) : null,
     server: form.value.server.trim() || null,
     community: form.value.community.trim() || null,
@@ -525,15 +545,15 @@ function cancelDelete() {
               <div>
                 <div class="flex items-center gap-1.5 mb-1">
                   <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Type *</label>
-                  <FieldTip text="Vendor type of the device. Used by FreeRADIUS for vendor-specific attributes." />
+                  <FieldTip text="Vendor type of the device. Used by FreeRADIUS for vendor-specific attributes. Pick a known vendor, or choose Other to type one." />
                 </div>
-                <input v-model="form.type" list="nas-type-options" type="text" placeholder="other"
-                  class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
-                  :class="formValidation.type ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
-                <datalist id="nas-type-options">
-                  <option v-for="t in nasTypes" :key="t" :value="t" />
-                </datalist>
-                <p v-if="formValidation.type" class="text-xs text-red-500 mt-1">{{ formValidation.type }}</p>
+                <select v-model="typeSelect"
+                  class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer capitalize">
+                  <option value="other">Other…</option>
+                  <option v-for="t in typeOptions" :key="t" :value="t" class="capitalize">{{ t }}</option>
+                </select>
+                <input v-if="typeSelect === 'other'" v-model="typeCustom" type="text" placeholder="Type custom vendor (e.g. teltonika)"
+                  class="mt-2 w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
               </div>
 
               <div>
