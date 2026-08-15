@@ -16,6 +16,7 @@ export interface CustomerSummary {
 
 export interface CustomerSubscription {
   id: number
+  packageId: number
   username: string
   planName: string
   status: string

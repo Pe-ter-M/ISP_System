@@ -89,6 +89,7 @@ public class CustomerRepository : ICustomerRepository
                 (s, p) => new CustomerSubscriptionDto
                 {
                     Id = s.Id,
+                    PackageId = s.PackageId,
                     Username = s.Username,
                     PlanName = p.Name,
                     Status = s.Status,

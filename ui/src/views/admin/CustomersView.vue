@@ -4,7 +4,7 @@ import { getCustomers, getCustomerById, createCustomer, updateCustomer, deleteCu
 import { useToastStore } from '@/stores/toast.store'
 import FieldTip from '@/components/FieldTip.vue'
 import { reverseGeocode } from '@/services/geocode.service'
-import type { ReverseGeocodeResult } from '@/services/geocode.service'
+import CustomerDetailModal from '@/components/CustomerDetailModal.vue'
 import type { CustomerSummary, CustomerDetail } from '@/types/customer.types'
 import type { CreateCustomerPayload, UpdateCustomerPayload } from '@/services/customer.service'
 
@@ -25,10 +25,9 @@ const search = ref('')
 const sortField = ref('name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 
-// Detail modal
+// Detail modal — handled by the reusable CustomerDetailModal component
 const showDetail = ref(false)
-const detailLoading = ref(false)
-const selectedCustomer = ref<CustomerDetail | null>(null)
+const detailCustomerId = ref<number | null>(null)
 
 // Create modal
 const showCreateModal = ref(false)
@@ -83,8 +82,6 @@ const locationBusy = ref(false)
 const locationError = ref('')
 const resolvedAddress = ref('')
 const editResolvedAddress = ref('')
-const detailLocation = ref<ReverseGeocodeResult | null>(null)
-const detailLocationLoading = ref(false)
 
 // ── Computed ──
 const pageNumbers = computed(() => {
@@ -321,33 +318,20 @@ async function handleCreate() {
 }
 
 // ── Detail ──
-async function openDetail(c: CustomerSummary) {
+/** Open the customer detail modal (reusable component fetches + renders it) */
+function openDetail(c: CustomerSummary) {
+  detailCustomerId.value = c.id
   showDetail.value = true
-  detailLoading.value = true
-  selectedCustomer.value = null
-  detailLocation.value = null
-  detailLocationLoading.value = false
-  try {
-    const d = await getCustomerById(c.id)
-    selectedCustomer.value = d
-    if (d.gpsLat !== null && d.gpsLng !== null) {
-      detailLocationLoading.value = true
-      reverseGeocode(d.gpsLat, d.gpsLng)
-        .then(r => { detailLocation.value = r })
-        .finally(() => { detailLocationLoading.value = false })
-    }
-  } catch (e: unknown) {
-    selectedCustomer.value = null
-    toast.error(errMsg(e, 'Failed to load customer details'))
-  } finally {
-    detailLoading.value = false
-  }
 }
 function closeDetail() {
   showDetail.value = false
-  selectedCustomer.value = null
-  detailLocation.value = null
-  detailLocationLoading.value = false
+  detailCustomerId.value = null
+}
+
+/** Handle "Edit" emitted by the reusable detail modal */
+function onDetailEdit(d: CustomerDetail) {
+  closeDetail()
+  openEdit(d)
 }
 
 // ── Edit ──
@@ -384,14 +368,6 @@ async function openEdit(c: CustomerSummary) {
   } finally {
     editLoading.value = false
   }
-}
-
-/** Edit from the detail modal — snapshot before closing so the id survives */
-function editFromDetail() {
-  const d = selectedCustomer.value
-  if (!d) return
-  closeDetail()
-  openEdit(d)
 }
 
 function closeEdit() {
@@ -1006,142 +982,14 @@ function cancelDelete() {
       </div>
     </Teleport>
 
-    <!-- ── Detail Modal ── -->
-    <Teleport to="body">
-      <div v-if="showDetail" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeDetail">
-        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeDetail"></div>
-        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-modal-in p-6 sm:p-8">
-          <button @click="closeDetail"
-            class="absolute top-4 right-4 w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm">✕</button>
-
-          <div v-if="detailLoading" class="flex justify-center py-16">
-            <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-
-          <div v-else-if="selectedCustomer" class="space-y-6">
-            <!-- Header -->
-            <div class="flex items-start justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
-              <div>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ selectedCustomer.fullName }}</h2>
-                  <span :class="statusClass(selectedCustomer.status)" class="px-2 py-0.5 rounded-full text-xs font-medium capitalize">{{ selectedCustomer.status }}</span>
-                  <span class="text-xs px-2 py-0.5 rounded-full font-medium"
-                    :class="selectedCustomer.hasActiveSubscription
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                      : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'">
-                    {{ selectedCustomer.hasActiveSubscription ? 'Active subscription' : 'No active subscription' }}
-                  </span>
-                </div>
-                <p class="text-xs text-gray-400 dark:text-gray-500 font-mono mt-1">{{ selectedCustomer.customerCode }}</p>
-                <p v-if="selectedCustomer.businessName" class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ selectedCustomer.businessName }} · <span class="capitalize">{{ selectedCustomer.customerType }}</span></p>
-              </div>
-              <button @click="editFromDetail"
-                class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
-                Edit Customer
-              </button>
-            </div>
-
-            <!-- Contact -->
-            <div>
-              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Contact</h3>
-              <div class="grid grid-cols-2 gap-3">
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Email</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm break-all">{{ selectedCustomer.email || '—' }}</p>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Phone</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm font-mono">{{ selectedCustomer.phone }}</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Location -->
-            <div>
-              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Location</h3>
-              <div class="grid grid-cols-2 gap-3">
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 col-span-2">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Service Address</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ selectedCustomer.serviceAddress || '—' }}</p>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">City</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ selectedCustomer.city || '—' }}</p>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Region</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ selectedCustomer.region || '—' }}</p>
-                </div>
-                <div class="col-span-2">
-                  <MapView
-                    v-if="selectedCustomer.gpsLat !== null && selectedCustomer.gpsLng !== null"
-                    :lat="selectedCustomer.gpsLat"
-                    :lng="selectedCustomer.gpsLng"
-                    :height="'200px'"
-                  />
-                  <p v-if="detailLocationLoading" class="mt-2 text-xs text-gray-400 dark:text-gray-500">Resolving location…</p>
-                  <p v-else-if="detailLocation && detailLocation.displayName" class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ detailLocation.displayName }}</p>
-                  <p v-else-if="selectedCustomer.gpsLat !== null" class="mt-2 text-xs text-gray-400 dark:text-gray-500 font-mono">
-                    {{ Number(selectedCustomer.gpsLat).toFixed(6) }}, {{ Number(selectedCustomer.gpsLng).toFixed(6) }}
-                  </p>
-                  <p v-else class="mt-2 text-xs text-gray-400 dark:text-gray-500">No location set for this customer.</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Access -->
-            <div>
-              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Access &amp; Account</h3>
-              <div class="grid grid-cols-2 gap-3">
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">PPPoE Username</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm font-mono">{{ selectedCustomer.usernamePpoe || '—' }}</p>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">PPPoE Password</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm font-mono">{{ selectedCustomer.passwordPpoe || '—' }}</p>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Created</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ friendlyDate(selectedCustomer.createdAt) }}</p>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Last Updated</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ friendlyDate(selectedCustomer.updatedAt) }}</p>
-                </div>
-              </div>
-              <p v-if="selectedCustomer.notes" class="mt-3 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2"><span class="font-semibold text-gray-600 dark:text-gray-300">Notes: </span>{{ selectedCustomer.notes }}</p>
-            </div>
-
-            <!-- Subscriptions -->
-            <div>
-              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Subscriptions</h3>
-              <div v-if="selectedCustomer.subscriptions.length === 0" class="text-center py-6 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                <p class="text-sm text-gray-400 dark:text-gray-500">No subscriptions yet</p>
-              </div>
-              <div v-else class="space-y-2">
-                <div v-for="sub in selectedCustomer.subscriptions" :key="sub.id"
-                  class="flex items-center justify-between gap-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5">
-                  <div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ sub.planName }}</p>
-                    <p class="text-xs text-gray-400 dark:text-gray-500 font-mono">{{ sub.username }}</p>
-                  </div>
-                  <div class="text-right">
-                    <span :class="statusClass(sub.status)" class="px-2 py-0.5 rounded-full text-xs font-medium capitalize">{{ sub.status }}</span>
-                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">{{ sub.currentPeriodEnd ? `ends ${friendlyDate(sub.currentPeriodEnd)}` : 'no period' }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-else class="p-8 text-center">
-            <p class="text-red-500 dark:text-red-400">Failed to load customer details.</p>
-            <button @click="closeDetail" class="mt-4 text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">Close</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- ── Detail Modal (reusable, read-only unless on this page) ── -->
+    <CustomerDetailModal
+      :open="showDetail"
+      :customer-id="detailCustomerId"
+      :editable="true"
+      @close="closeDetail"
+      @edit="onDetailEdit"
+    />
 
     <!-- ── Delete Confirmation Modal ── -->
     <Teleport to="body">

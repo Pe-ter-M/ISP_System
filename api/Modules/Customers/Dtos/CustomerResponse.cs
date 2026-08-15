@@ -51,6 +51,7 @@ public class CustomerDetailResponse
 public class CustomerSubscriptionDto
 {
     public int Id { get; set; }
+    public int PackageId { get; set; }
     public string Username { get; set; } = string.Empty;
     public string PlanName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;

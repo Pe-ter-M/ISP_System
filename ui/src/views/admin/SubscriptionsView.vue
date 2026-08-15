@@ -8,8 +8,11 @@ import {
 import { getCustomers } from '@/services/customer.service'
 import { getPlans } from '@/services/plan.service'
 import { formatPrice } from '@/types/plan.types'
+import { formatDateShort, formatDateTime } from '@/utils/format'
 import { useToastStore } from '@/stores/toast.store'
 import FieldTip from '@/components/FieldTip.vue'
+import CustomerDetailModal from '@/components/CustomerDetailModal.vue'
+import PlanDetailModal from '@/components/PlanDetailModal.vue'
 import type { SubscriptionSummary, SubscriptionStatus, Payment, PaymentMethodOption } from '@/types/subscription.types'
 import type { CustomerSummary } from '@/types/customer.types'
 import type { PlanSummary } from '@/types/plan.types'
@@ -42,6 +45,13 @@ const detailLoading = ref(false)
 const selectedSub = ref<SubscriptionSummary | null>(null)
 const payments = ref<Payment[]>([])
 const paymentsLoading = ref(false)
+
+// ── Composed detail modals (customer + plan) ──
+/** Customer detail opened from the subscription modal (read-only, no edit). */
+const showCustomerDetail = ref(false)
+const customerDetailId = ref<number | null>(null)
+/** Plan card opened from the subscription/customer detail (read-only). */
+const planModalId = ref<number | null>(null)
 
 // ── Delete modal ──
 const showDelete = ref(false)
@@ -184,11 +194,6 @@ function statusDot(status: SubscriptionStatus): string {
   }
 }
 
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString()
-}
-
 function paymentMethodLabel(method: string | null): string {
   if (!method) return '—'
   const found = paymentMethods.value.find(m => m.value.toLowerCase() === method.toLowerCase())
@@ -322,6 +327,36 @@ function closeDetail() {
   showDetail.value = false
   selectedSub.value = null
   payments.value = []
+}
+
+// ── Composed modals (view customer / plan from subscription detail) ──
+/** Open the customer detail modal on top of the subscription modal (read-only). */
+function openCustomerDetail() {
+  if (!selectedSub.value) return
+  customerDetailId.value = selectedSub.value.customerId
+  showCustomerDetail.value = true
+}
+function closeCustomerDetail() {
+  showCustomerDetail.value = false
+  customerDetailId.value = null
+}
+
+/** A subscription's plan card can be viewed if it is not expired (paused included). */
+function subCanViewPlan(sub: SubscriptionSummary | null): boolean {
+  if (!sub) return false
+  if (sub.status === 'expired') return false
+  if (sub.currentPeriodEnd) {
+    const end = new Date(sub.currentPeriodEnd)
+    if (!Number.isNaN(end.getTime()) && end.getTime() < Date.now()) return false
+  }
+  return true
+}
+function openPlanDetail() {
+  if (!selectedSub.value) return
+  planModalId.value = selectedSub.value.packageId
+}
+function closePlanDetail() {
+  planModalId.value = null
 }
 
 // ── Quick actions ──
@@ -532,7 +567,7 @@ function cancelDelete() {
                   <span :class="statusClass(s.status)" class="px-2 py-0.5 rounded-full text-xs font-medium capitalize">{{ s.status }}</span>
                 </div>
               </td>
-              <td class="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">{{ fmtDate(s.currentPeriodEnd) }}</td>
+              <td class="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap">{{ formatDateShort(s.currentPeriodEnd) }}</td>
               <td class="px-4 py-3 hidden md:table-cell">
                 <label class="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" class="sr-only peer" :checked="s.autoRenew" @change="toggleAutoRenew(s)" :disabled="toggleBusyId !== null" />
@@ -805,17 +840,29 @@ function cancelDelete() {
               </div>
             </div>
 
+            <!-- Quick actions: view the linked customer / plan card (read-only) -->
+            <div class="flex flex-wrap items-center gap-2 -mt-1">
+              <button @click="openCustomerDetail"
+                class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
+                View Customer Info
+              </button>
+              <button v-if="subCanViewPlan(selectedSub)" @click="openPlanDetail"
+                class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
+                View Plan Card
+              </button>
+            </div>
+
             <!-- Info grid -->
             <div>
               <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Subscription</h3>
               <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                   <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Period Start</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ fmtDate(selectedSub.currentPeriodStart) }}</p>
+                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ formatDateTime(selectedSub.currentPeriodStart) }}</p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                   <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Period End</p>
-                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ fmtDate(selectedSub.currentPeriodEnd) }}</p>
+                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ formatDateTime(selectedSub.currentPeriodEnd) }}</p>
                 </div>
                 <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                   <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Auto-Renew</p>
@@ -857,7 +904,7 @@ function cancelDelete() {
                     </span>
                     <div class="min-w-0">
                       <p class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ formatPrice(p.amountCents) }}</p>
-                      <p class="text-xs text-gray-400 dark:text-gray-500">{{ p.paymentMethod }} · {{ fmtDate(p.completedAt || p.createdAt) }}</p>
+                      <p class="text-xs text-gray-400 dark:text-gray-500">{{ p.paymentMethod }} · {{ formatDateTime(p.completedAt || p.createdAt) }}</p>
                     </div>
                   </div>
                   <div class="text-right min-w-0">
@@ -876,6 +923,24 @@ function cancelDelete() {
         </div>
       </div>
     </Teleport>
+
+    <!-- ── Composed modals (read-only, stacked above the subscription detail) ──
+         These close one at a time: the plan card closes, then the customer, then
+         the subscription. Editing the customer is disabled while composed. -->
+    <CustomerDetailModal
+      :open="showCustomerDetail"
+      :customer-id="customerDetailId"
+      :editable="false"
+      context-label="Customer on this subscription"
+      :z-index="60"
+      @close="closeCustomerDetail"
+    />
+    <PlanDetailModal
+      :plan-id="planModalId"
+      context-label="Plan on this subscription"
+      :z-index="70"
+      @close="closePlanDetail"
+    />
 
     <!-- ── Delete Confirmation Modal ── -->
     <Teleport to="body">
