@@ -17,5 +17,29 @@ services:
       timeout: 5s
       retries: 5
 
+  freeradius:
+    image: freeradius/freeradius-server:latest
+    container_name: isp-freeradius
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # RADIUS authentication / accounting (UDP)
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    volumes:
+      # Custom config overlay (kept in ./radius, everything else stays in the image)
+      - ./radius/mods-available/sql:/etc/freeradius/mods-available/sql:ro
+      - ./radius/mods-enabled/sql:/etc/freeradius/mods-enabled/sql:ro
+      - ./radius/sites-available/default:/etc/freeradius/sites-available/default:ro
+      - ./radius/clients.conf:/etc/freeradius/clients.conf:ro
+      - freeradius_log:/var/log/freeradius
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   postgres_data:
+  freeradius_log:
