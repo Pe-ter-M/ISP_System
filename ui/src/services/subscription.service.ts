@@ -54,6 +54,12 @@ export async function updateSubscription(id: number, payload: UpdateSubscription
   return res.data as SubscriptionSummary
 }
 
+/** Suspend / resume a subscription — governed by subscription.suspend permission. */
+export async function updateSubscriptionStatus(id: number, status: 'active' | 'suspended' | 'expired'): Promise<SubscriptionSummary> {
+  const res = await api.patch(`/subscriptions/${id}/status`, { status })
+  return res.data as SubscriptionSummary
+}
+
 export async function deleteSubscription(id: number): Promise<void> {
   await api.delete(`/subscriptions/${id}`)
 }

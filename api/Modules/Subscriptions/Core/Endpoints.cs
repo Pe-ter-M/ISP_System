@@ -135,6 +135,19 @@ public static class SubscriptionEndpoints
         })
         .RequirePermission(Permissions.SubscriptionsUpdate);
 
+        // ── PATCH: Suspend / Resume a subscription (status-only change) ──
+        // Governed by the dedicated subscription.suspend permission so a role can
+        // suspend/resume without needing full subscription.update.
+        group.MapPatch("/{id:int}/status", async (int id, UpdateSubscriptionRequest req, ISubscriptionService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("PATCH /api/subscriptions/{Id}/status called", id);
+            var item = await service.UpdateAsync(id, req);
+            return ApiResponse.Success(item, item.Status == "suspended"
+                ? "Subscription suspended and synchronized to FreeRADIUS"
+                : "Subscription resumed and synchronized to FreeRADIUS").ToResult();
+        })
+        .RequirePermission(Permissions.SubscriptionsSuspend);
+
         // ── DELETE: Hard Delete Subscription and flush RADIUS policies ──
         group.MapDelete("/{id:int}", async (int id, ISubscriptionService service, ILogger<LoggerMarker> log) =>
         {

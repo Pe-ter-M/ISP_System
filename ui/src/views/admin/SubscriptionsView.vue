@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import {
   getSubscriptions, getSubscriptionStats, getSubscriptionById,
-  createSubscription, updateSubscription, deleteSubscription,
+  createSubscription, updateSubscription, updateSubscriptionStatus, deleteSubscription,
   getPaymentMethods, getPayments,
 } from '@/services/subscription.service'
 import { getCustomers } from '@/services/customer.service'
@@ -10,6 +10,7 @@ import { getPlans } from '@/services/plan.service'
 import { formatPrice } from '@/types/plan.types'
 import { formatDateShort, formatDateTime } from '@/utils/format'
 import { useToastStore } from '@/stores/toast.store'
+import { useAuthStore } from '@/stores/auth.store'
 import FieldTip from '@/components/FieldTip.vue'
 import Can from '@/components/Can.vue'
 import CustomerDetailModal from '@/components/CustomerDetailModal.vue'
@@ -20,6 +21,9 @@ import type { PlanSummary } from '@/types/plan.types'
 import type { CreateSubscriptionPayload } from '@/types/subscription.types'
 
 const toast = useToastStore()
+const auth = useAuthStore()
+/** Only users with subscription.update see the auto-renew column / toggle. */
+const canUpdateSubscription = computed(() => auth.can('subscription.update'))
 
 // ── State ──
 const subs = ref<SubscriptionSummary[]>([])
@@ -384,7 +388,8 @@ async function toggleStatus(s: SubscriptionSummary) {
   actionError.value = ''
   const next: SubscriptionStatus = s.status === 'suspended' ? 'active' : 'suspended'
   try {
-    const updated = await updateSubscription(s.id, { status: next })
+    // Suspends/resumes via the dedicated status endpoint (subscription.suspend)
+    const updated = await updateSubscriptionStatus(s.id, next)
     const idx = subs.value.findIndex(x => x.id === s.id)
     if (idx !== -1) subs.value[idx] = updated
     toast.success(updated.status === 'active' ? `Subscription for ${updated.customerFullName} resumed` : `Subscription for ${updated.customerFullName} suspended`)
@@ -542,7 +547,7 @@ function cancelDelete() {
               <th @click="toggleSort('username')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap hidden lg:table-cell">PPPoE <span class="text-xs ml-1">{{ sortIcon('username') }}</span></th>
               <th @click="toggleSort('status')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap">Status <span class="text-xs ml-1">{{ sortIcon('status') }}</span></th>
               <th @click="toggleSort('periodend')" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition whitespace-nowrap hidden sm:table-cell">Period End <span class="text-xs ml-1">{{ sortIcon('periodend') }}</span></th>
-              <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">Auto-Renew</th>
+              <th v-if="canUpdateSubscription" class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">Auto-Renew</th>
               <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap hidden xl:table-cell">Latest Payment</th>
               <th class="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Actions</th>
             </tr>
@@ -571,7 +576,7 @@ function cancelDelete() {
                 </div>
               </td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap">{{ formatDateShort(s.currentPeriodEnd) }}</td>
-              <td class="px-4 py-3 hidden md:table-cell">
+              <td v-if="canUpdateSubscription" class="px-4 py-3 hidden md:table-cell">
                 <Can permission="subscription.update">
                   <label class="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" class="sr-only peer" :checked="s.autoRenew" @change="toggleAutoRenew(s)" :disabled="toggleBusyId !== null" />
@@ -592,7 +597,7 @@ function cancelDelete() {
                     class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
                     View
                   </button>
-                  <Can permission="subscription.update">
+                  <Can permission="subscription.suspend">
                     <button v-if="s.status !== 'expired'" @click="toggleStatus(s)"
                       class="px-3 py-1.5 text-xs font-medium rounded-lg transition cursor-pointer"
                       :class="s.status === 'active'

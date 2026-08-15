@@ -81,11 +81,24 @@ export function getFilteredNav(userPermissions: string[]) {
     .map((section) => ({
       ...section,
       items: section.items
-        .filter((item) => hasAny(item.permissions))
-        .map((item) => item.children
-          ? { ...item, children: item.children.filter((c) => hasAny(c.permissions)) }
-          : item)
-        .filter((item) => !item.children || item.children.length > 0),
+        .map((item) => {
+          if (item.children && item.children.length > 0) {
+            // Parent with children: keep only the children the user can see,
+            // and show the parent if IT is permitted OR any child is visible.
+            // (A user with customer.view but not users.view still sees Customers.)
+            const children = item.children.filter((c) => hasAny(c.permissions))
+            if (children.length === 0) return null
+            // If the user can't open the parent's own page (e.g. no users.view),
+            // make the parent link open its first visible child instead.
+            const parentAllowed = hasAny(item.permissions)
+            const firstChild = children[0]
+            return parentAllowed || !firstChild
+              ? { ...item, children }
+              : { ...item, children, path: firstChild.path }
+          }
+          return hasAny(item.permissions) ? item : null
+        })
+        .filter((item): item is NavItem => item !== null),
     }))
     .filter((section) => section.items.length > 0)
 }
