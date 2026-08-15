@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getSettings, createSetting, updateSetting, deleteSetting } from '@/services/settings.service'
 import { getPaymentMethods } from '@/services/subscription.service'
+import { reverseGeocode } from '@/services/geocode.service'
 import { useToastStore } from '@/stores/toast.store'
 import { useSettingsStore } from '@/stores/settings.store'
 import FieldTip from '@/components/FieldTip.vue'
+import MapView from '@/components/MapView.vue'
 import type { SettingItem } from '@/types/settings.types'
 import type { CreateSettingPayload, UpdateSettingPayload } from '@/types/settings.types'
 import type { PaymentMethodOption } from '@/types/subscription.types'
@@ -46,11 +48,79 @@ const gateways = ref<PaymentMethodOption[]>([])
 const gatewaysLoading = ref(false)
 const selectedPaymentMethods = ref<string[]>([])
 
+// ── Address (map) settings — office_address / company_address ──
+/** Keys whose value is a location, stored as JSON { address, lat, lng } */
+const addressKeys = ['office_address', 'company_address']
+/** Unique colour for the office marker so it stands out from other pins */
+const OFFICE_MARKER_COLOR = '#f97316'
+/** Draft location being edited in the create/edit modal */
+const addressDraft = ref<{ address: string; lat: number | null; lng: number | null }>({
+  address: '', lat: null, lng: null,
+})
+
+function isAddressKey(key: string): boolean {
+  return addressKeys.includes(key)
+}
+
+/** Parse a stored location: JSON {address,lat,lng} or a plain-text address */
+function parseAddressValue(raw: string): { address: string; lat: number | null; lng: number | null } {
+  const t = raw.trim()
+  if (t.startsWith('{')) {
+    try {
+      const p = JSON.parse(t) as Record<string, unknown>
+      if (p && typeof p.address === 'string') {
+        return {
+          address: p.address,
+          lat: typeof p.lat === 'number' ? p.lat : null,
+          lng: typeof p.lng === 'number' ? p.lng : null,
+        }
+      }
+    } catch {
+      // not JSON — fall through and treat as plain text
+    }
+  }
+  return { address: t, lat: null, lng: null }
+}
+
+/** The office marker rendered on the map — unique colour + label */
+const officeMarkers = computed(() => {
+  if (addressDraft.value.lat == null || addressDraft.value.lng == null) return []
+  return [{
+    lat: addressDraft.value.lat,
+    lng: addressDraft.value.lng,
+    label: 'Office',
+    sublabel: addressDraft.value.address || undefined,
+    color: OFFICE_MARKER_COLOR,
+  }]
+})
+
+/** When the admin picks a point on the map, reverse-geocode it into an address */
+async function onOfficeMapSelect(point: { lat: number; lng: number }) {
+  addressDraft.value.lat = point.lat
+  addressDraft.value.lng = point.lng
+  const result = await reverseGeocode(point.lat, point.lng)
+  if (result?.displayName) addressDraft.value.address = result.displayName
+}
+
+/** Serialise the current location draft into the stored JSON value */
+function addressValueJson(): string {
+  return JSON.stringify({
+    address: addressDraft.value.address.trim(),
+    lat: addressDraft.value.lat,
+    lng: addressDraft.value.lng,
+  })
+}
+
+/** True when a known key is already present in the settings — used to disable it in the add dropdown */
+function isKeyTaken(key: string): boolean {
+  return settings.value.some(s => s.key === key)
+}
+
 // Common settings keys — the dropdown of items that can be added
 const commonKeys = [
   'company_name', 'company_short_name', 'company_phone', 'company_email', 'company_address',
   'business_hours', 'business_days', 'currency', 'payment_methods',
-   'sms_balance_threshold',
+   'sms_balance_threshold', 'office_address'
 ]
 
 // ── Fetch ──
@@ -110,6 +180,9 @@ function onKeyChoiceChange() {
   if (keyChoice.value === 'payment_methods') {
     selectedPaymentMethods.value = gateways.value.map(g => g.value)
   }
+  if (isAddressKey(keyChoice.value)) {
+    addressDraft.value = { address: '', lat: null, lng: null }
+  }
 }
 
 // ── Helpers ──
@@ -132,6 +205,12 @@ function friendlyDate(iso: string | null | undefined): string {
 
 function displayValue(s: SettingItem): string {
   if (s.isEncrypted) return '•••••••• (encrypted)'
+  if (isAddressKey(s.key)) {
+    const loc = parseAddressValue(s.value)
+    const coords = loc.lat != null && loc.lng != null ? ` (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})` : ''
+    const text = loc.address.trim() || s.value.trim()
+    return text ? `${text}${coords}` : '—'
+  }
   return s.value || '—'
 }
 
@@ -139,6 +218,7 @@ function displayValue(s: SettingItem): string {
 function openCreate() {
   createForm.value = { key: '', value: '', description: '' }
   keyChoice.value = ''
+  addressDraft.value = { address: '', lat: null, lng: null }
   createError.value = ''
   createValidation.value = {}
   showCreateModal.value = true
@@ -151,6 +231,9 @@ function validateCreate(): boolean {
   else if (!/^[a-z][a-z0-9_]*$/.test(createForm.value.key.trim())) v.key = 'Lowercase letters, numbers and underscores only (e.g. company_name)'
   else if (settings.value.some(s => s.key === createForm.value.key.trim())) v.key = 'This key already exists'
   if (createForm.value.key === 'payment_methods' && selectedPaymentMethods.value.length === 0) v.value = 'Select at least one payment method'
+  else if (isAddressKey(createForm.value.key)) {
+    if (!addressDraft.value.address.trim()) v.value = 'Address is required — type it or pick it on the map'
+  }
   else if (!createForm.value.value.trim()) v.value = 'Value is required'
   createValidation.value = v
   return Object.keys(v).length === 0
@@ -161,9 +244,12 @@ async function handleCreate() {
   createLoading.value = true
   createError.value = ''
   const isPayMethods = createForm.value.key === 'payment_methods'
+  const isAddr = isAddressKey(createForm.value.key)
   const payload: CreateSettingPayload = {
     key: createForm.value.key.trim(),
-    value: isPayMethods ? JSON.stringify(selectedPaymentMethods.value) : createForm.value.value,
+    value: isPayMethods ? JSON.stringify(selectedPaymentMethods.value)
+      : isAddr ? addressValueJson()
+      : createForm.value.value,
     description: createForm.value.description.trim() || null,
   }
   try {
@@ -185,6 +271,9 @@ async function handleCreate() {
 function openEdit(s: SettingItem) {
   editingKey.value = s.key
   editForm.value = { value: s.isEncrypted ? '' : s.value, description: s.description ?? '' }
+  if (isAddressKey(s.key)) {
+    addressDraft.value = parseAddressValue(s.isEncrypted ? '' : s.value)
+  }
   if (s.key === 'payment_methods') {
     const parsed = parsePayMethods(s.value)
     selectedPaymentMethods.value = parsed.length > 0 ? parsed : gateways.value.map(g => g.value)
@@ -204,6 +293,9 @@ function closeEdit() {
 function validateEdit(): boolean {
   const v: Record<string, string> = {}
   if (editingKey.value === 'payment_methods' && selectedPaymentMethods.value.length === 0) v.value = 'Select at least one payment method'
+  else if (editingKey.value !== null && isAddressKey(editingKey.value)) {
+    if (!addressDraft.value.address.trim()) v.value = 'Address is required — type it or pick it on the map'
+  }
   else if (!editForm.value.value.trim()) v.value = 'Value is required'
   editValidation.value = v
   return Object.keys(v).length === 0
@@ -215,8 +307,11 @@ async function handleEdit() {
   editSaving.value = true
   editError.value = ''
   const isPayMethods = editingKey.value === 'payment_methods'
+  const isAddr = isAddressKey(editingKey.value)
   const payload: UpdateSettingPayload = {
-    value: isPayMethods ? JSON.stringify(selectedPaymentMethods.value) : editForm.value.value,
+    value: isPayMethods ? JSON.stringify(selectedPaymentMethods.value)
+      : isAddr ? addressValueJson()
+      : editForm.value.value,
     description: editForm.value.description.trim() || null,
   }
   try {
@@ -380,7 +475,9 @@ function cancelDelete() {
               <select v-model="keyChoice" @change="onKeyChoiceChange"
                 class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer">
                 <option value="" disabled>Select a setting…</option>
-                <option v-for="k in commonKeys" :key="k" :value="k" class="font-mono">{{ k }}</option>
+                <option v-for="k in commonKeys" :key="k" :value="k" :disabled="isKeyTaken(k)" class="font-mono">
+                  {{ k }}<span v-if="isKeyTaken(k)" class="text-gray-400 dark:text-gray-500"> (already set — edit it below)</span>
+                </option>
                 <option value="custom">Custom key…</option>
               </select>
               <input v-if="keyChoice === 'custom'" v-model="createForm.key" type="text" placeholder="my_custom_key"
@@ -408,6 +505,27 @@ function cancelDelete() {
                 </div>
                 <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5 font-mono">{{ JSON.stringify(selectedPaymentMethods) }}</p>
               </template>
+              <div v-else-if="isAddressKey(createForm.key)" class="space-y-3">
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Two ways to set the office location: type the address below, <span class="font-semibold">or</span> pick it on the map for accuracy (search a place or click the map — the orange marker is the office).
+                </p>
+                <input v-model="addressDraft.address" type="text" placeholder="e.g. Moi Avenue, Nairobi"
+                  class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  :class="createValidation.value ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
+                <MapView
+                  :lat="addressDraft.lat"
+                  :lng="addressDraft.lng"
+                  :markers="officeMarkers"
+                  interactive
+                  searchable
+                  fullscreenable
+                  height="260px"
+                  @select="onOfficeMapSelect"
+                />
+                <p v-if="addressDraft.lat != null && addressDraft.lng != null" class="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                  Office coordinates: {{ addressDraft.lat.toFixed(5) }}, {{ addressDraft.lng.toFixed(5) }}
+                </p>
+              </div>
               <textarea v-else v-model="createForm.value" rows="2" placeholder="Wifi Connect ISP"
                 class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                 :class="createValidation.value ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
@@ -474,6 +592,27 @@ function cancelDelete() {
                 </div>
                 <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5 font-mono">{{ JSON.stringify(selectedPaymentMethods) }}</p>
               </template>
+              <div v-else-if="editingKey !== null && isAddressKey(editingKey)" class="space-y-3">
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Two ways to set the office location: type the address below, <span class="font-semibold">or</span> pick it on the map for accuracy (search a place or click the map — the orange marker is the office).
+                </p>
+                <input v-model="addressDraft.address" type="text"
+                  class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  :class="editValidation.value ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
+                <MapView
+                  :lat="addressDraft.lat"
+                  :lng="addressDraft.lng"
+                  :markers="officeMarkers"
+                  interactive
+                  searchable
+                  fullscreenable
+                  height="260px"
+                  @select="onOfficeMapSelect"
+                />
+                <p v-if="addressDraft.lat != null && addressDraft.lng != null" class="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                  Office coordinates: {{ addressDraft.lat.toFixed(5) }}, {{ addressDraft.lng.toFixed(5) }}
+                </p>
+              </div>
               <textarea v-else v-model="editForm.value" rows="2"
                 class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
                 :class="editValidation.value ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />

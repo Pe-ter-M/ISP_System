@@ -1,10 +1,25 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrganizationStore } from '@/stores/organization.store'
 import { useSettingsStore } from '@/stores/settings.store'
+import { useCompanyInfo } from '@/composables/useCompanyInfo'
+import MapView from '@/components/MapView.vue'
 
-const org = useOrganizationStore()
 const settings = useSettingsStore()
+// Contact info comes from settings (office/company address, email, phone)
+const { email, phone, address, officeLocation } = useCompanyInfo()
+
+// Unique colour for the office marker on the map
+const OFFICE_MARKER_COLOR = '#f97316'
+const officeMarkers = computed(() => {
+  if (!officeLocation.value) return []
+  return [{
+    lat: officeLocation.value.lat,
+    lng: officeLocation.value.lng,
+    label: 'Office',
+    sublabel: address.value,
+    color: OFFICE_MARKER_COLOR,
+  }]
+})
 
 const form = ref({
   name: '',
@@ -23,11 +38,6 @@ function handleSubmit() {
 onMounted(() => {
   settings.load()
 })
-
-// ── Contact info: settings override the org profile, which overrides defaults ──
-const email = computed(() => settings.value('company_email') ?? org.supportEmail ?? 'support@phantomnet.co.ke')
-const phone = computed(() => settings.value('company_phone') ?? org.supportPhone ?? '+254 700 000 000')
-const address = computed(() => settings.value('company_address') ?? org.address ?? 'Nairobi, Kenya')
 
 // ── Business hours / days come from settings ──
 interface BusinessHoursRow {
@@ -194,6 +204,19 @@ const businessDays = computed(() =>
                 <h3 class="font-semibold text-gray-800 dark:text-gray-100">Address</h3>
                 <p class="text-gray-500 dark:text-gray-400">{{ address }}</p>
               </div>
+            </div>
+
+            <!-- Office Map — unique orange marker, set in Settings → office_address -->
+            <div v-if="officeLocation">
+              <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">Our office</p>
+              <MapView
+                :lat="officeLocation.lat"
+                :lng="officeLocation.lng"
+                :markers="officeMarkers"
+                fullscreenable
+                height="220px"
+                :zoom="14"
+              />
             </div>
           </div>
         </div>
