@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { getCustomerById } from '@/services/customer.service'
 import { reverseGeocode } from '@/services/geocode.service'
 import { formatDate } from '@/utils/format'
+import { useAuthStore } from '@/stores/auth.store'
 import type { ReverseGeocodeResult } from '@/services/geocode.service'
 import type { CustomerDetail, CustomerSubscription } from '@/types/customer.types'
 import MapView from './MapView.vue'
@@ -41,6 +42,10 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'edit', customer: CustomerDetail): void
 }>()
+
+const auth = useAuthStore()
+/** Can edit only when allowed on this page (editable) AND the user has customer.update. */
+const canEdit = computed(() => props.editable && auth.can('customer.update'))
 
 const customer = ref<CustomerDetail | null>(null)
 const loading = ref(false)
@@ -154,8 +159,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               <p class="text-xs text-gray-400 dark:text-gray-500 font-mono mt-1">{{ customer.customerCode }}</p>
               <p v-if="customer.businessName" class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ customer.businessName }} · <span class="capitalize">{{ customer.customerType }}</span></p>
             </div>
-            <!-- Edit only available on the Customers page (not when composed cross-context) -->
-            <button v-if="editable" @click="editCustomer"
+            <!-- Edit only available on the Customers page and only with customer.update -->
+            <button v-if="canEdit" @click="editCustomer"
               class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
               Edit Customer
             </button>

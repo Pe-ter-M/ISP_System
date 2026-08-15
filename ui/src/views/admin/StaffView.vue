@@ -7,6 +7,7 @@ import { formatPrice } from '@/types/plan.types'
 import { useToastStore } from '@/stores/toast.store'
 import { useSettingsStore } from '@/stores/settings.store'
 import FieldTip from '@/components/FieldTip.vue'
+import Can from '@/components/Can.vue'
 import type { StaffSummary } from '@/types/staff.types'
 import type { CreateStaffPayload, UpdateStaffPayload } from '@/types/staff.types'
 import type { Role } from '@/types/role.types'
@@ -613,13 +614,15 @@ function cancelDelete() {
           <input v-model="search" type="text" placeholder="Search name, code, email, phone..."
             class="pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition w-64" />
         </div>
-        <button @click="openCreate"
-          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Add Staff
-        </button>
+        <Can permission="staff.create">
+          <button @click="openCreate"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Staff
+          </button>
+        </Can>
       </div>
     </div>
 
@@ -727,14 +730,18 @@ function cancelDelete() {
                     class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
                     View
                   </button>
-                  <button @click="openEdit(s)"
-                    class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
-                    Edit
-                  </button>
-                  <button @click="openDelete(s)"
-                    class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
-                    Delete
-                  </button>
+                  <Can permission="staff.update">
+                    <button @click="openEdit(s)"
+                      class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
+                      Edit
+                    </button>
+                  </Can>
+                  <Can permission="staff.delete">
+                    <button @click="openDelete(s)"
+                      class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
+                      Delete
+                    </button>
+                  </Can>
                 </div>
               </td>
             </tr>
@@ -745,7 +752,9 @@ function cancelDelete() {
       <!-- ── Empty State ── -->
       <div v-if="staff.length === 0 && !loading && !error" class="text-center py-16">
         <p class="text-gray-400 dark:text-gray-500">No staff members found</p>
-        <button @click="openCreate" class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">Add the first staff member</button>
+        <Can permission="staff.create">
+          <button @click="openCreate" class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">Add the first staff member</button>
+        </Can>
       </div>
 
       <!-- ── Pagination ── -->
@@ -1045,10 +1054,12 @@ function cancelDelete() {
                 </div>
                 <p class="text-xs text-gray-400 dark:text-gray-500 font-mono mt-1">{{ selectedStaff.staffCode }}</p>
               </div>
-              <button @click="editFromDetail"
-                class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
-                Edit Staff
-              </button>
+              <Can permission="staff.update">
+                <button @click="editFromDetail"
+                  class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
+                  Edit Staff
+                </button>
+              </Can>
             </div>
 
             <!-- Salary highlight -->
@@ -1117,10 +1128,12 @@ function cancelDelete() {
                     <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span> Revoked</span>
                   </div>
                   <div class="flex items-center gap-2">
-                    <button @click="openPermsEditor(selectedStaff)"
-                      class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
-                      Edit permissions
-                    </button>
+                    <Can permission="users.update">
+                      <button @click="openPermsEditor(selectedStaff)"
+                        class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
+                        Edit permissions
+                      </button>
+                    </Can>
                     <button @click="permsExpanded = false"
                       class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer whitespace-nowrap">
                       Collapse

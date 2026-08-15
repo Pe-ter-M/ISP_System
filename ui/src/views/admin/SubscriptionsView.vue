@@ -11,6 +11,7 @@ import { formatPrice } from '@/types/plan.types'
 import { formatDateShort, formatDateTime } from '@/utils/format'
 import { useToastStore } from '@/stores/toast.store'
 import FieldTip from '@/components/FieldTip.vue'
+import Can from '@/components/Can.vue'
 import CustomerDetailModal from '@/components/CustomerDetailModal.vue'
 import PlanDetailModal from '@/components/PlanDetailModal.vue'
 import type { SubscriptionSummary, SubscriptionStatus, Payment, PaymentMethodOption } from '@/types/subscription.types'
@@ -463,13 +464,15 @@ function cancelDelete() {
           <option value="suspended">Suspended</option>
           <option value="expired">Expired</option>
         </select>
-        <button @click="openCreate"
-          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          New Subscription
-        </button>
+        <Can permission="subscription.create">
+          <button @click="openCreate"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New Subscription
+          </button>
+        </Can>
       </div>
     </div>
 
@@ -569,10 +572,12 @@ function cancelDelete() {
               </td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell whitespace-nowrap">{{ formatDateShort(s.currentPeriodEnd) }}</td>
               <td class="px-4 py-3 hidden md:table-cell">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" class="sr-only peer" :checked="s.autoRenew" @change="toggleAutoRenew(s)" :disabled="toggleBusyId !== null" />
-                  <div class="w-9 h-5 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
-                </label>
+                <Can permission="subscription.update">
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" class="sr-only peer" :checked="s.autoRenew" @change="toggleAutoRenew(s)" :disabled="toggleBusyId !== null" />
+                    <div class="w-9 h-5 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                  </label>
+                </Can>
               </td>
               <td class="px-4 py-3 text-xs text-gray-600 dark:text-gray-400 hidden xl:table-cell">
                 <template v-if="s.paymentReference">
@@ -587,17 +592,21 @@ function cancelDelete() {
                     class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
                     View
                   </button>
-                  <button v-if="s.status !== 'expired'" @click="toggleStatus(s)"
-                    class="px-3 py-1.5 text-xs font-medium rounded-lg transition cursor-pointer"
-                    :class="s.status === 'active'
-                      ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40'
-                      : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40'">
-                    {{ s.status === 'active' ? 'Suspend' : 'Resume' }}
-                  </button>
-                  <button @click="openDelete(s)"
-                    class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
-                    Delete
-                  </button>
+                  <Can permission="subscription.update">
+                    <button v-if="s.status !== 'expired'" @click="toggleStatus(s)"
+                      class="px-3 py-1.5 text-xs font-medium rounded-lg transition cursor-pointer"
+                      :class="s.status === 'active'
+                        ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/40'
+                        : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40'">
+                      {{ s.status === 'active' ? 'Suspend' : 'Resume' }}
+                    </button>
+                  </Can>
+                  <Can permission="subscription.delete">
+                    <button @click="openDelete(s)"
+                      class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
+                      Delete
+                    </button>
+                  </Can>
                 </div>
               </td>
             </tr>
