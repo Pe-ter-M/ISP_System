@@ -800,10 +800,12 @@ function statusDot(active: boolean) {
                 </div>
                 <p v-if="selectedPlan.description" class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ selectedPlan.description }}</p>
               </div>
-              <button @click="editFromDetail"
-                class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
-                Edit Plan
-              </button>
+              <Can permission="plan.update">
+                <button @click="editFromDetail"
+                  class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
+                  Edit Plan
+                </button>
+              </Can>
             </div>
 
             <!-- Price highlight -->

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { getNas, createNas, updateNas, deleteNas } from '@/services/nas.service'
 import { useToastStore } from '@/stores/toast.store'
 import FieldTip from '@/components/FieldTip.vue'
+import Can from '@/components/Can.vue'
 import type { NasClient } from '@/types/nas.types'
 import type { CreateNasPayload, UpdateNasPayload } from '@/types/nas.types'
 
@@ -380,13 +381,15 @@ function cancelDelete() {
           <option value="">All types</option>
           <option v-for="t in nasTypes" :key="t" :value="t" class="capitalize">{{ t }}</option>
         </select>
-        <button @click="openCreate"
-          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Add NAS
-        </button>
+        <Can permission="radius.nas.manage">
+          <button @click="openCreate"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add NAS
+          </button>
+        </Can>
       </div>
     </div>
 
@@ -466,14 +469,16 @@ function cancelDelete() {
                     class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
                     View
                   </button>
-                  <button @click="openEdit(n)"
-                    class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
-                    Edit
-                  </button>
-                  <button @click="openDelete(n)"
-                    class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
-                    Delete
-                  </button>
+                  <Can permission="radius.nas.manage">
+                    <button @click="openEdit(n)"
+                      class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
+                      Edit
+                    </button>
+                    <button @click="openDelete(n)"
+                      class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
+                      Delete
+                    </button>
+                  </Can>
                 </div>
               </td>
             </tr>
@@ -645,10 +650,12 @@ function cancelDelete() {
                 </div>
                 <p v-if="selectedNas.description" class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ selectedNas.description }}</p>
               </div>
-              <button @click="editFromDetail"
-                class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
-                Edit
-              </button>
+              <Can permission="radius.nas.manage">
+                <button @click="editFromDetail"
+                  class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer whitespace-nowrap">
+                  Edit
+                </button>
+              </Can>
             </div>
 
             <!-- Details -->
