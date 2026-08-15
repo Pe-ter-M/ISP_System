@@ -6,6 +6,9 @@ export interface NavItem {
   permissions?: string[]
   /** Optional sub-items rendered as a collapsible dropdown under this item */
   children?: NavItem[]
+  /** For parents with children: true when the user can open the parent's own page.
+   *  When false, the parent is rendered as a plain heading + dropdown only (no link). */
+  parentLinkAllowed?: boolean
 }
 
 export interface NavSection {
@@ -83,18 +86,17 @@ export function getFilteredNav(userPermissions: string[]) {
       items: section.items
         .map((item) => {
           if (item.children && item.children.length > 0) {
-            // Parent with children: keep only the children the user can see,
-            // and show the parent if IT is permitted OR any child is visible.
-            // (A user with customer.view but not users.view still sees Customers.)
             const children = item.children.filter((c) => hasAny(c.permissions))
-            if (children.length === 0) return null
-            // If the user can't open the parent's own page (e.g. no users.view),
-            // make the parent link open its first visible child instead.
             const parentAllowed = hasAny(item.permissions)
-            const firstChild = children[0]
-            return parentAllowed || !firstChild
-              ? { ...item, children }
-              : { ...item, children, path: firstChild.path }
+            if (parentAllowed) {
+              // User can open the parent's own page — always show it. Children
+              // are the visible subset (may be empty when only users.view is held).
+              return { ...item, children, parentLinkAllowed: true }
+            }
+            // Parent's own page not permitted: show it only if a child is visible
+            // (e.g. customer.view without users.view → heading + Customers dropdown).
+            if (children.length === 0) return null
+            return { ...item, children, parentLinkAllowed: false }
           }
           return hasAny(item.permissions) ? item : null
         })

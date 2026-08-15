@@ -856,10 +856,12 @@ function cancelDelete() {
 
             <!-- Quick actions: view the linked customer / plan card (read-only) -->
             <div class="flex flex-wrap items-center gap-2 -mt-1">
-              <button @click="openCustomerDetail"
-                class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
-                View Customer Info
-              </button>
+              <Can permission="customer.view">
+                <button @click="openCustomerDetail"
+                  class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
+                  View Customer Info
+                </button>
+              </Can>
               <button v-if="subCanViewPlan(selectedSub)" @click="openPlanDetail"
                 class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
                 View Plan Card

@@ -103,7 +103,9 @@ function goProfile() {
             <!-- Parent with dropdown children -->
             <div v-for="item in section.items.filter(i => i.children?.length)" :key="item.path" class="space-y-1">
               <div class="flex items-center rounded-lg">
+                <!-- If the user can open the parent's own page, it's a link; otherwise it's a heading that expands the dropdown. -->
                 <RouterLink
+                  v-if="item.parentLinkAllowed !== false"
                   :to="item.path"
                   @click="closeSidebar"
                   class="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 no-underline"
@@ -115,6 +117,18 @@ function goProfile() {
                   {{ item.label }}
                 </RouterLink>
                 <button
+                  v-else
+                  @click="toggleExpand(item)"
+                  class="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer text-left"
+                  :class="isExpanded(item)
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'"
+                >
+                  <span v-if="item.icon" v-html="item.icon" class="flex-shrink-0"></span>
+                  {{ item.label }}
+                </button>
+                <button
+                  v-if="item.children?.length"
                   @click="toggleExpand(item)"
                   class="px-2 py-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition cursor-pointer"
                   :aria-label="`Toggle ${item.label} submenu`"
@@ -126,7 +140,7 @@ function goProfile() {
               </div>
 
               <!-- Children -->
-              <div v-if="isExpanded(item)" class="ml-4 pl-3 border-l border-gray-200 dark:border-gray-800 space-y-1">
+              <div v-if="isExpanded(item) && item.children?.length" class="ml-4 pl-3 border-l border-gray-200 dark:border-gray-800 space-y-1">
                 <RouterLink
                   v-for="child in item.children"
                   :key="child.path"
