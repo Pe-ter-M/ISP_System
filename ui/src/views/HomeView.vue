@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useOrganizationStore } from '@/stores/organization.store'
+import { useCompanyInfo } from '@/composables/useCompanyInfo'
 
 const org = useOrganizationStore()
+const { companyName } = useCompanyInfo()
 </script>
 
 <template>
@@ -14,7 +16,7 @@ const org = useOrganizationStore()
           {{ org.tagline || 'Connect with confidence' }}
         </h1>
         <p class="text-lg sm:text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-          Welcome to <span class="font-semibold text-blue-600 dark:text-blue-400">{{ org.name || 'PhantomNet' }}</span> — your reliable internet service management platform. 
+          Welcome to <span class="font-semibold text-blue-600 dark:text-blue-400">{{ companyName }}</span> — your reliable internet service management platform. 
           We provide seamless connectivity solutions tailored for your needs.
         </p>
         <div class="flex flex-wrap gap-4 pt-4">

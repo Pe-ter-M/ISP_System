@@ -13,6 +13,25 @@ public static class SettingsEndpoints
     {
         var group = app.MapGroup("/api/settings").WithTags("Settings");
 
+        // GET /api/settings — list all settings, requires settings.view
+        group.MapGet("/", async (ISettingService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogDebug("GET /api/settings — listing all settings");
+            var settings = await service.GetAllAsync();
+            return ApiResponse.Success(settings, $"Found {settings.Count} settings").ToResult();
+        })
+        .RequirePermission(Permissions.SettingsView);
+
+        // GET /api/settings/public — public, no auth, only non-encrypted settings
+        // (powers the frontend settings store used by public pages like Contact)
+        group.MapGet("/public", async (ISettingService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogDebug("GET /api/settings/public — listing public settings");
+            var settings = await service.GetAllAsync();
+            var publicSettings = settings.Where(s => !s.IsEncrypted).ToList();
+            return ApiResponse.Success(publicSettings, $"Found {publicSettings.Count} public settings").ToResult();
+        });
+
         // GET /api/settings/{key} — public, no auth
         group.MapGet("/{key}", async (string key, ISettingService service, ILogger<LoggerMarker> log) =>
         {

@@ -136,7 +136,7 @@ public class SubscriptionService : ISubscriptionService
         // 3. Process payment through chosen gateway
         var method = request.PaymentMethod;
         _log.LogInformation("Processing purchase of {Price} cents via payment provider: {Provider}", package.PriceCents, method);
-        var gateway = _paymentResolver.GetGateway(method);
+        var gateway = await _paymentResolver.GetGatewayAsync(method);
 
         var paymentResult = await gateway.ProcessPaymentAsync(
             package.PriceCents, 

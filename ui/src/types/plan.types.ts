@@ -1,3 +1,5 @@
+import { useSettingsStore } from '@/stores/settings.store'
+
 export interface PlanSummary {
   id: number
   name: string
@@ -58,9 +60,10 @@ export interface UpdatePlanPayload {
   isActive?: boolean
 }
 
-/** Convert price cents to display string with symbol */
-export function formatPrice(cents: number, symbol = 'KSh'): string {
-  return `${symbol} ${(cents / 100).toLocaleString()}`
+/** Convert price cents to display string with symbol (currency comes from settings, e.g. "KES 1,500") */
+export function formatPrice(cents: number, symbol?: string): string {
+  const currency = symbol ?? useSettingsStore().value('currency') ?? 'KSh'
+  return `${currency} ${(cents / 100).toLocaleString()}`
 }
 
 /** Convert kbps to Mbps display (e.g. 30720 → "30 Mbps") */

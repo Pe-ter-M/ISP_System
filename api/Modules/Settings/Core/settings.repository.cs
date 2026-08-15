@@ -16,6 +16,14 @@ public class SettingRepository : ISettingRepository
         _log = log;
     }
 
+    public async Task<List<Setting>> GetAllAsync()
+    {
+        _log.LogDebug("Fetching all settings");
+        var settings = await _db.Settings.OrderBy(s => s.Key).ToListAsync();
+        _log.LogDebug("Found {Count} settings", settings.Count);
+        return settings;
+    }
+
     public async Task<Setting?> GetByKeyAsync(string key)
     {
         _log.LogDebug("Fetching setting {Key}", key);

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useThemeStore } from '@/stores/theme.store'
 import { useOrganizationStore } from '@/stores/organization.store'
+import { useCompanyInfo } from '@/composables/useCompanyInfo'
 import { getFilteredNav } from '@/config/navigation'
 import type { NavItem } from '@/config/navigation'
 
@@ -12,9 +13,12 @@ const router = useRouter()
 const auth = useAuthStore()
 const theme = useThemeStore()
 const org = useOrganizationStore()
+const { companyName, initial } = useCompanyInfo()
 
 const sidebarOpen = ref(false)
 const expandedGroups = ref<Record<string, boolean>>({})
+
+onMounted(() => { org.load() })
 
 const filteredNav = computed(() => getFilteredNav(auth.userPermissions))
 
@@ -66,10 +70,10 @@ function goProfile() {
       <!-- Sidebar Header -->
       <div class="h-16 flex items-center gap-3 px-5 border-b border-gray-200 dark:border-gray-800">
         <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-          {{ org.shortName?.charAt(0) || org.name?.charAt(0) || 'P' }}
+          {{ initial }}
         </div>
         <span class="font-bold text-gray-800 dark:text-gray-100 truncate">
-          {{ org.shortName || org.name || 'PhantomNet' }}
+          {{ companyName }}
         </span>
       </div>
 

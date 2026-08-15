@@ -2,11 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
-import { useOrganizationStore } from '@/stores/organization.store'
+import { useCompanyInfo } from '@/composables/useCompanyInfo'
 
 const router = useRouter()
 const auth = useAuthStore()
-const org = useOrganizationStore()
+const { companyName, initial, email: supportEmail } = useCompanyInfo()
 
 const email = ref('')
 const password = ref('')
@@ -34,10 +34,10 @@ async function handleLogin() {
       <!-- Header -->
       <div class="text-center mb-8">
         <div class="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4">
-          {{ org.shortName?.charAt(0) || org.name?.charAt(0) || 'P' }}
+          {{ initial }}
         </div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ org.name || 'PhantomNet' }}
+          {{ companyName }}
         </h1>
         <p class="text-gray-500 dark:text-gray-400 mt-1">Sign in to your account</p>
       </div>
@@ -88,8 +88,8 @@ async function handleLogin() {
       </div>
 
       <!-- Support -->
-      <p v-if="org.supportEmail" class="text-center mt-6 text-xs text-gray-400 dark:text-gray-500">
-        Need help? Contact {{ org.supportEmail }}
+      <p v-if="supportEmail" class="text-center mt-6 text-xs text-gray-400 dark:text-gray-500">
+        Need help? Contact {{ supportEmail }}
       </p>
     </div>
   </div>

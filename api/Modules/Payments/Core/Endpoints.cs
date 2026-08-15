@@ -15,10 +15,10 @@ public static class PaymentsEndpoints
         var group = app.MapGroup("/api/payments").WithTags("Payments");
 
         // ── GET: Available payment methods (registered gateways) ──
-        group.MapGet("/methods", (PaymentGatewayResolver resolver, ILogger<LoggerMarker> log) =>
+        group.MapGet("/methods", async (PaymentGatewayResolver resolver, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/payments/methods called");
-            var methods = resolver.GetAvailableMethods()
+            var methods = (await resolver.GetAvailableMethodsAsync())
                 .Select(m => new PaymentMethodResponse(m.ToString(), LabelFor(m)))
                 .ToList();
             return ApiResponse.Success(methods, $"Found {methods.Count} payment methods").ToResult();

@@ -36,7 +36,7 @@ const router = createRouter({
         { path: 'users/staff', name: 'admin-users-staff', component: () => import('../views/admin/StaffView.vue'), meta: { title: 'Staff' } },
         { path: 'roles', name: 'roles', component: () => import('../views/admin/RolesView.vue'), meta: { title: 'Roles' } },
         { path: 'audit', name: 'audit', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Audit Log' } },
-        { path: 'settings', name: 'settings', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Settings' } },
+        { path: 'settings', name: 'settings', component: () => import('../views/admin/SettingsView.vue'), meta: { title: 'Settings' } },
       ],
     },
   ],

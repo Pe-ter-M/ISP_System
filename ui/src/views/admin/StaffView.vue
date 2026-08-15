@@ -5,6 +5,7 @@ import { getRoles, getRolePermissions } from '@/services/role.service'
 import { getUserById, getPermissions, updateUserPermissions } from '@/services/user.service'
 import { formatPrice } from '@/types/plan.types'
 import { useToastStore } from '@/stores/toast.store'
+import { useSettingsStore } from '@/stores/settings.store'
 import FieldTip from '@/components/FieldTip.vue'
 import type { StaffSummary } from '@/types/staff.types'
 import type { CreateStaffPayload, UpdateStaffPayload } from '@/types/staff.types'
@@ -12,6 +13,9 @@ import type { Role } from '@/types/role.types'
 import type { Permission, PermissionOverride } from '@/types/user.types'
 
 const toast = useToastStore()
+const settingsStore = useSettingsStore()
+/** Configured currency code (e.g. KES) used in form labels */
+const currency = computed(() => settingsStore.value('currency') ?? 'KES')
 
 // ── State ──
 const staff = ref<StaffSummary[]>([])
@@ -833,7 +837,7 @@ function cancelDelete() {
 
               <div>
                 <div class="flex items-center gap-1.5 mb-1">
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Salary (KES) *</label>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Salary ({{ currency }}) *</label>
                   <FieldTip text="Gross monthly salary in Kenya Shillings. Tracked to monitor the total money spent on staff." />
                 </div>
                 <input v-model.number="createForm.salaryKes" type="number" min="0" step="0.01" placeholder="45000"
@@ -958,7 +962,7 @@ function cancelDelete() {
 
               <div>
                 <div class="flex items-center gap-1.5 mb-1">
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Salary (KES) *</label>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Salary ({{ currency }}) *</label>
                   <FieldTip text="Gross monthly salary. Updating it changes the monthly salary spend total." />
                 </div>
                 <input v-model.number="editForm.salaryKes" type="number" min="0" step="0.01"

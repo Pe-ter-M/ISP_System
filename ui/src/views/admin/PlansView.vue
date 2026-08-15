@@ -3,10 +3,14 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { getAdminPlans, getPlanStats, getPlanDetail, createPlan, updatePlan, deletePlan } from '@/services/plan.service'
 import { formatPrice, formatSpeed, formatDuration } from '@/types/plan.types'
 import { useToastStore } from '@/stores/toast.store'
+import { useSettingsStore } from '@/stores/settings.store'
 import FieldTip from '@/components/FieldTip.vue'
 import type { PlanSummary, PlanDetail, CreatePlanPayload, UpdatePlanPayload } from '@/types/plan.types'
 
 const toast = useToastStore()
+const settingsStore = useSettingsStore()
+/** Configured currency code (e.g. KES) used in form labels */
+const currency = computed(() => settingsStore.value('currency') ?? 'KES')
 
 // ── State ──
 const plans = ref<PlanSummary[]>([])
@@ -647,7 +651,7 @@ function statusDot(active: boolean) {
 
               <div>
                 <div class="flex items-center gap-1.5 mb-1">
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Price (KES) *</label>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Price ({{ currency }}) *</label>
                   <FieldTip text="Amount customers pay each billing cycle, in Kenya Shillings. Stored as cents internally." />
                 </div>
                 <input v-model.number="form.priceKes" type="number" min="0" step="0.01" placeholder="1500"
