@@ -9,6 +9,7 @@ import type { AuditLogListItem, AuditAction } from '@/types/audit.types'
 const items = ref<AuditLogListItem[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const refreshing = ref(false)
 
 const page = ref(1)
 const pageSize = ref(20)
@@ -54,7 +55,15 @@ async function fetchLogs() {
     error.value = errMsg(e, 'Failed to load audit log')
   } finally {
     loading.value = false
+    refreshing.value = false
   }
+}
+
+/** Re-fetch the current view without a full-screen spinner. */
+async function refresh() {
+  if (refreshing.value) return
+  refreshing.value = true
+  await fetchLogs()
 }
 
 onMounted(fetchLogs)
@@ -166,6 +175,13 @@ function closeDetail() {
           <option value="login_success">Login success</option>
           <option value="login_failure">Login failed</option>
         </select>
+        <button @click="refresh" :disabled="refreshing"
+          class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition cursor-pointer disabled:opacity-40 flex items-center gap-1.5" title="Refresh">
+          <svg class="w-4 h-4" :class="{ 'animate-spin': refreshing }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span class="hidden sm:inline">{{ refreshing ? 'Refreshing…' : 'Refresh' }}</span>
+        </button>
       </div>
     </div>
 
