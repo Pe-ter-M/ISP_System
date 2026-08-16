@@ -5,13 +5,18 @@ import { getPaymentMethods } from '@/services/subscription.service'
 import { reverseGeocode } from '@/services/geocode.service'
 import { useToastStore } from '@/stores/toast.store'
 import { useSettingsStore } from '@/stores/settings.store'
+import { useAuthStore } from '@/stores/auth.store'
 import FieldTip from '@/components/FieldTip.vue'
+import Can from '@/components/Can.vue'
 import MapView from '@/components/MapView.vue'
 import type { SettingItem } from '@/types/settings.types'
 import type { CreateSettingPayload, UpdateSettingPayload } from '@/types/settings.types'
 import type { PaymentMethodOption } from '@/types/subscription.types'
 
 const toast = useToastStore()
+const auth = useAuthStore()
+/** Settings can be created/edited/deleted only by users with settings.update. */
+const canUpdateSettings = computed(() => auth.can('settings.update'))
 /** Cached public settings used across the site — refresh so edits apply immediately */
 const settingsStore = useSettingsStore()
 
@@ -370,13 +375,15 @@ function cancelDelete() {
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Settings</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ settings.length }} system settings</p>
       </div>
-      <button @click="openCreate"
-        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-        Add Setting
-      </button>
+      <Can permission="settings.update">
+        <button @click="openCreate"
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2 whitespace-nowrap">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Add Setting
+        </button>
+      </Can>
     </div>
 
     <!-- ── Info note ── -->
@@ -417,7 +424,7 @@ function cancelDelete() {
               <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Setting</th>
               <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Value</th>
               <th class="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap hidden md:table-cell">Updated</th>
-              <th class="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Actions</th>
+              <th v-if="canUpdateSettings" class="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -432,16 +439,18 @@ function cancelDelete() {
               </td>
               <td class="px-4 py-3 text-gray-700 dark:text-gray-300 break-all max-w-[280px]">{{ displayValue(s) }}</td>
               <td class="px-4 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell whitespace-nowrap">{{ friendlyDate(s.updatedAt) }}</td>
-              <td class="px-4 py-3 text-right">
+              <td v-if="canUpdateSettings" class="px-4 py-3 text-right">
                 <div class="flex items-center justify-end gap-1.5">
-                  <button @click="openEdit(s)"
-                    class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
-                    Edit
-                  </button>
-                  <button @click="openDelete(s)"
-                    class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
-                    Delete
-                  </button>
+                  <Can permission="settings.update">
+                    <button @click="openEdit(s)"
+                      class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
+                      Edit
+                    </button>
+                    <button @click="openDelete(s)"
+                      class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition cursor-pointer">
+                      Delete
+                    </button>
+                  </Can>
                 </div>
               </td>
             </tr>
@@ -451,7 +460,9 @@ function cancelDelete() {
 
       <div v-if="settings.length === 0 && !loading && !error" class="text-center py-16">
         <p class="text-gray-400 dark:text-gray-500">No settings yet</p>
-        <button @click="openCreate" class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">Add the first setting</button>
+        <Can permission="settings.update">
+          <button @click="openCreate" class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">Add the first setting</button>
+        </Can>
       </div>
     </div>
 
