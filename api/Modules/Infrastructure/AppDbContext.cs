@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<Subscriptions.Core.Models.SubscriptionAudit> SubscriptionAudits => Set<Subscriptions.Core.Models.SubscriptionAudit>();
     public DbSet<Settings.Core.Models.Setting> Settings => Set<Settings.Core.Models.Setting>();
     public DbSet<Payments.Core.Models.Payment> Payments => Set<Payments.Core.Models.Payment>();
+    public DbSet<Audit.Core.Models.AuditLog> AuditLogs => Set<Audit.Core.Models.AuditLog>();
 
     // FreeRADIUS tables
     public DbSet<Radius.Core.Models.RadCheck> RadChecks => Set<Radius.Core.Models.RadCheck>();

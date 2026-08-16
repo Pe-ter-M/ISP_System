@@ -1,6 +1,7 @@
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Nas.Interfaces;
 using InternetProvider.Api.Modules.Nas.Dtos;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Nas.Core;
 
@@ -45,29 +46,32 @@ public static class NasEndpoints
         })
         .RequirePermission(Permissions.RadiusNasManage);
 
-        group.MapPost("/", async (CreateNasRequest req, INasService service, ILogger<LoggerMarker> log) =>
+        group.MapPost("/", async (CreateNasRequest req, INasService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/nas — creating NAS client {Nasname}", req.Nasname);
             var nasClient = await service.CreateAsync(req);
             log.LogInformation("Created NAS client {NasId} — {Nasname}", nasClient.Id, nasClient.Nasname);
+            await audit.RecordAsync("nas", nasClient.Id, "create", $"NAS client '{nasClient.Nasname}' created");
             return ApiResponse.Created(nasClient, "NAS client created successfully").ToResult();
         })
         .RequirePermission(Permissions.RadiusNasManage);
 
-        group.MapPut("/{id:int}", async (int id, UpdateNasRequest req, INasService service, ILogger<LoggerMarker> log) =>
+        group.MapPut("/{id:int}", async (int id, UpdateNasRequest req, INasService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/nas/{NasId} — updating NAS client", id);
             var nasClient = await service.UpdateAsync(id, req);
             log.LogInformation("Updated NAS client {NasId} — {Nasname}", nasClient.Id, nasClient.Nasname);
+            await audit.RecordAsync("nas", id, "update", $"NAS client '{nasClient.Nasname}' updated");
             return ApiResponse.Success(nasClient, "NAS client updated successfully").ToResult();
         })
         .RequirePermission(Permissions.RadiusNasManage);
 
-        group.MapDelete("/{id:int}", async (int id, INasService service, ILogger<LoggerMarker> log) =>
+        group.MapDelete("/{id:int}", async (int id, INasService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/nas/{NasId} called", id);
             await service.DeleteAsync(id);
             log.LogDebug("NAS client {NasId} deleted successfully", id);
+            await audit.RecordAsync("nas", id, "delete", $"NAS client #{id} deleted");
             return ApiResponse.Success(null, "NAS client deleted successfully").ToResult();
         })
         .RequirePermission(Permissions.RadiusNasManage);

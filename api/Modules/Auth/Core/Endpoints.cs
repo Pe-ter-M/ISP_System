@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using InternetProvider.Api.Modules.Auth.Dtos;
 using InternetProvider.Api.Modules.Auth.Interfaces;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Auth.Core;
@@ -13,7 +14,7 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth");
 
-        group.MapPost("/login", async (LoginRequest req, IAuthService auth, ILogger<LoggerMarker> log) =>
+        group.MapPost("/login", async (LoginRequest req, IAuthService auth, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("Login attempt for {Email}", req.Email);
             var result = await auth.LoginAsync(req);
@@ -21,10 +22,16 @@ public static class AuthEndpoints
             if (result == null)
             {
                 log.LogWarning("Login failed for {Email}", req.Email);
+                await audit.RecordAsync("auth", null, "login_failure",
+                    $"Failed login attempt for {req.Email}",
+                    actorType: "anonymous");
                 return ApiResponse.Error("Invalid email or password", 401).ToResult();
             }
 
             log.LogInformation("Login successful for {Email} ({FullName})", req.Email, result.FullName);
+            await audit.RecordAsync("auth", result.UserId, "login_success",
+                $"{result.FullName} logged in",
+                actorUserId: result.UserId, actorType: "staff");
             return ApiResponse.Success(result, "Login successful").ToResult();
         });
 

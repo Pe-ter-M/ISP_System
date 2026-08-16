@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Settings.Interfaces;
 using InternetProvider.Api.Modules.Settings.Dtos;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Settings.Core;
 
@@ -43,33 +44,36 @@ public static class SettingsEndpoints
         });
 
         // POST /api/settings — create, requires settings.update
-        group.MapPost("/", async (CreateSettingRequest req, ISettingService service, ILogger<LoggerMarker> log) =>
+        group.MapPost("/", async (CreateSettingRequest req, ISettingService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/settings — creating {Key}", req.Key);
             var setting = await service.CreateAsync(req, null);
             log.LogInformation("Setting {Key} created", setting.Key);
+            await audit.RecordAsync("setting", null, "create", $"Setting '{setting.Key}' created");
             return ApiResponse.Created(setting, "Setting created").ToResult();
         })
         .RequirePermission(Permissions.SettingsUpdate);
 
         // PUT /api/settings/{key} — update, requires settings.update
-        group.MapPut("/{key}", async (string key, UpdateSettingRequest req, ISettingService service, ILogger<LoggerMarker> log) =>
+        group.MapPut("/{key}", async (string key, UpdateSettingRequest req, ISettingService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/settings/{Key} — updating", key);
             var setting = await service.UpdateAsync(key, req, null);
             if (setting == null)
                 return ApiResponse.Error($"Setting '{key}' not found", 404).ToResult();
             log.LogInformation("Setting {Key} updated", key);
+            await audit.RecordAsync("setting", null, "update", $"Setting '{key}' updated");
             return ApiResponse.Success(setting, "Setting updated").ToResult();
         })
         .RequirePermission(Permissions.SettingsUpdate);
 
         // DELETE /api/settings/{key} — requires settings.update
-        group.MapDelete("/{key}", async (string key, ISettingService service, ILogger<LoggerMarker> log) =>
+        group.MapDelete("/{key}", async (string key, ISettingService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/settings/{Key} — deleting", key);
             await service.DeleteAsync(key);
             log.LogInformation("Setting {Key} deleted", key);
+            await audit.RecordAsync("setting", null, "delete", $"Setting '{key}' deleted");
             return ApiResponse.Success(null, "Setting deleted").ToResult();
         })
         .RequirePermission(Permissions.SettingsUpdate);

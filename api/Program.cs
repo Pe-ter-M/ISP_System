@@ -25,6 +25,8 @@ using InternetProvider.Api.Modules.Subscriptions.Core;
 using InternetProvider.Api.Modules.Payments.Interfaces;
 using InternetProvider.Api.Modules.Payments.Core.Gateways;
 using InternetProvider.Api.Modules.Payments.Services;
+using InternetProvider.Api.Modules.Audit.Interfaces;
+using InternetProvider.Api.Modules.Audit.Core;
 using InternetProvider.Api.Services;
 
 // ── Serilog bootstrap (catches startup errors before config loads) ──
@@ -86,6 +88,11 @@ try
     // ── Subscription services ─────────────────────────────────────────
     builder.Services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
     builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+
+    // ── Audit services ────────────────────────────────────────────────
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+    builder.Services.AddScoped<IAuditService, AuditService>();
 
     // ── Payment Infrastructure services ──────────────────────────────
     builder.Services.AddScoped<IPaymentGateway, MockPaymentGateway>();

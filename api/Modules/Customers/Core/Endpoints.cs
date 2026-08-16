@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Customers.Interfaces;
 using InternetProvider.Api.Modules.Customers.Dtos;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Customers.Core;
 
@@ -36,12 +37,13 @@ public static class CustomerEndpoints
         })
         .RequirePermission(Permissions.CustomersView);
 
-        group.MapPost("/", async (CreateCustomerRequest req, ICustomerService service, ILogger<LoggerMarker> log) =>
+        group.MapPost("/", async (CreateCustomerRequest req, ICustomerService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/customers — creating {FullName}", req.FullName);
             try
             {
                 var customer = await service.CreateAsync(req);
+                await audit.RecordAsync("customer", customer.Id, "create", $"Customer '{customer.FullName}' created");
                 return ApiResponse.Created(customer, "Customer created successfully").ToResult();
             }
             catch (ConflictException ex)
@@ -51,13 +53,14 @@ public static class CustomerEndpoints
         })
         .RequirePermission(Permissions.CustomersCreate);
 
-        group.MapPut("/{id:int}", async (int id, UpdateCustomerRequest req, ICustomerService service, ILogger<LoggerMarker> log) =>
+        group.MapPut("/{id:int}", async (int id, UpdateCustomerRequest req, ICustomerService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/customers/{CustomerId} — updating customer", id);
             try
             {
                 var customer = await service.UpdateAsync(id, req);
                 log.LogInformation("Customer {CustomerId} updated successfully", id);
+                await audit.RecordAsync("customer", id, "update", $"Customer '{customer.FullName}' updated");
                 return ApiResponse.Success(customer, "Customer updated successfully").ToResult();
             }
             catch (ConflictException ex)
@@ -67,11 +70,12 @@ public static class CustomerEndpoints
         })
         .RequirePermission(Permissions.CustomersUpdate);
 
-        group.MapDelete("/{id:int}", async (int id, ICustomerService service, ILogger<LoggerMarker> log) =>
+        group.MapDelete("/{id:int}", async (int id, ICustomerService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/customers/{CustomerId} called", id);
             var result = await service.DeleteAsync(id);
             log.LogInformation("Customer {CustomerId} delete completed (hard: {HardDeleted})", id, result.HardDeleted);
+            await audit.RecordAsync("customer", id, "delete", $"Customer #{id} deleted");
             return ApiResponse.Success(result, result.Message).ToResult();
         })
         .RequirePermission(Permissions.CustomersDelete);

@@ -36,7 +36,7 @@ const router = createRouter({
         { path: 'users/customers', name: 'admin-users-customers', component: () => import('../views/admin/CustomersView.vue'), meta: { title: 'Customers', requiresPermission: 'customer.view' } },
         { path: 'users/staff', name: 'admin-users-staff', component: () => import('../views/admin/StaffView.vue'), meta: { title: 'Staff', requiresPermission: 'staff.view' } },
         { path: 'roles', name: 'roles', component: () => import('../views/admin/RolesView.vue'), meta: { title: 'Roles', requiresPermission: 'role.manage' } },
-        { path: 'audit', name: 'audit', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Audit Log', requiresPermission: 'audit.view' } },
+        { path: 'audit', name: 'audit', component: () => import('../views/admin/AuditLogView.vue'), meta: { title: 'Audit Log', requiresPermission: 'audit.view' } },
         { path: 'settings', name: 'settings', component: () => import('../views/admin/SettingsView.vue'), meta: { title: 'Settings', requiresPermission: 'settings.view' } },
       ],
     },

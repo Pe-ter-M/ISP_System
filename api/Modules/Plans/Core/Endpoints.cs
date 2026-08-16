@@ -1,6 +1,7 @@
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Dtos;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Plans.Core;
 
@@ -74,29 +75,32 @@ public static class PlanEndpoints
         })
         .RequirePermission(Permissions.PlansView);
 
-        adminGroup.MapPost("/", async (CreatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
+        adminGroup.MapPost("/", async (CreatePlanRequest req, IPlanService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/admin/plans — creating {Name}", req.Name);
             var plan = await service.CreateAsync(req);
             log.LogInformation("Plan created successfully: {PlanId} — {Name}", plan.Id, plan.Name);
+            await audit.RecordAsync("plan", plan.Id, "create", $"Plan '{plan.Name}' created");
             return ApiResponse.Success(plan, "Plan created successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansCreate);
 
-        adminGroup.MapPut("/{id:int}", async (int id, UpdatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
+        adminGroup.MapPut("/{id:int}", async (int id, UpdatePlanRequest req, IPlanService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/admin/plans/{PlanId} called", id);
             var plan = await service.UpdateAsync(id, req);
             log.LogInformation("Plan {PlanId} updated successfully", id);
+            await audit.RecordAsync("plan", id, "update", $"Plan '{plan.Name}' updated");
             return ApiResponse.Success(plan, "Plan updated successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansUpdate);
 
-        adminGroup.MapDelete("/{id:int}", async (int id, IPlanService service, ILogger<LoggerMarker> log) =>
+        adminGroup.MapDelete("/{id:int}", async (int id, IPlanService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/admin/plans/{PlanId} called", id);
             await service.DeleteAsync(id);
             log.LogInformation("Plan {PlanId} and associated RADIUS policy deleted", id);
+            await audit.RecordAsync("plan", id, "delete", $"Plan #{id} deleted");
             return ApiResponse.Success(null, "Plan and its RADIUS policies deleted successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansDelete);

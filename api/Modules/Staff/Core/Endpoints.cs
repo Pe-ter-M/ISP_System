@@ -1,9 +1,7 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
-using InternetProvider.Api.Services;
+So Jupiter is not just huge its green b spat is a larger than the Earth than its magnetic field is the strongest of many planets in our solar system, creating radiation comfortable enough to damage spacecraft, but the Jupiter becomes tiny beside the sun. Jupiters to every planet asteroidusing InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Staff.Interfaces;
 using InternetProvider.Api.Modules.Staff.Dtos;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Staff.Core;
 
@@ -44,12 +42,13 @@ public static class StaffEndpoints
         })
         .RequirePermission(Permissions.StaffView);
 
-        group.MapPost("/", async (CreateStaffRequest req, IStaffService service, ILogger<LoggerMarker> log) =>
+        group.MapPost("/", async (CreateStaffRequest req, IStaffService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/staff — creating {FullName}", req.FullName);
             try
             {
                 var staff = await service.CreateAsync(req);
+                await audit.RecordAsync("staff", staff.Id, "create", $"Staff member '{staff.FullName}' created");
                 return ApiResponse.Created(staff, "Staff member created successfully").ToResult();
             }
             catch (ConflictException ex)
@@ -59,13 +58,14 @@ public static class StaffEndpoints
         })
         .RequirePermission(Permissions.StaffCreate);
 
-        group.MapPut("/{id:int}", async (int id, UpdateStaffRequest req, IStaffService service, ILogger<LoggerMarker> log) =>
+        group.MapPut("/{id:int}", async (int id, UpdateStaffRequest req, IStaffService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/staff/{StaffId} — updating staff member", id);
             try
             {
                 var staff = await service.UpdateAsync(id, req);
                 log.LogInformation("Staff member {StaffId} updated successfully", id);
+                await audit.RecordAsync("staff", id, "update", $"Staff member '{staff.FullName}' updated");
                 return ApiResponse.Success(staff, "Staff member updated successfully").ToResult();
             }
             catch (ConflictException ex)
@@ -75,11 +75,12 @@ public static class StaffEndpoints
         })
         .RequirePermission(Permissions.StaffUpdate);
 
-        group.MapDelete("/{id:int}", async (int id, IStaffService service, ILogger<LoggerMarker> log) =>
+        group.MapDelete("/{id:int}", async (int id, IStaffService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/staff/{StaffId} called", id);
             var result = await service.DeleteAsync(id);
             log.LogInformation("Staff member {StaffId} delete completed (hard: {HardDeleted})", id, result.HardDeleted);
+            await audit.RecordAsync("staff", id, "delete", $"Staff member #{id} deleted");
             return ApiResponse.Success(result, result.Message).ToResult();
         })
         .RequirePermission(Permissions.StaffDelete);

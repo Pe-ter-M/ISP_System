@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 using InternetProvider.Api.Modules.Roles.Core.Models;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Roles.Core;
 
@@ -22,7 +23,7 @@ public static class RoleEndpoints
         })
         .RequirePermission(Permissions.RolesManage);
 
-        roles.MapDelete("/{roleId:int}", async (int roleId, AppDbContext db, ILogger<LoggerMarker> log) =>
+        roles.MapDelete("/{roleId:int}", async (int roleId, AppDbContext db, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/roles/{RoleId}", roleId);
 
@@ -42,11 +43,12 @@ public static class RoleEndpoints
 
             await db.SaveChangesAsync();
             log.LogInformation("Role deleted: {RoleId}", roleId);
+            await audit.RecordAsync("role", roleId, "delete", $"Role '{role.Name}' deleted");
             return ApiResponse.Success(new { roleId }, "Role deleted").ToResult();
         })
         .RequirePermission(Permissions.RolesManage);
 
-        roles.MapPost("/", async (CreateRoleRequest req, AppDbContext db, ILogger<LoggerMarker> log) =>
+        roles.MapPost("/", async (CreateRoleRequest req, AppDbContext db, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/roles — creating role {Name}", req.Name);
             if (await db.Roles.AnyAsync(r => r.Name == req.Name))
@@ -56,6 +58,7 @@ public static class RoleEndpoints
             db.Roles.Add(role);
             await db.SaveChangesAsync();
             log.LogInformation("Role created: {RoleId} — {Name}", role.Id, role.Name);
+            await audit.RecordAsync("role", role.Id, "create", $"Role '{role.Name}' created");
             return ApiResponse.Created(new { role.Id, role.Name, role.Description }, "Role created").ToResult();
         })
         .RequirePermission(Permissions.RolesManage);
@@ -83,7 +86,7 @@ public static class RoleEndpoints
         .RequirePermission(Permissions.RolesManage);
 
         // Accepts permission codes (same convention as user permissions endpoint)
-        rolePerms.MapPut("/", async (int roleId, SetRolePermissionsRequest req, AppDbContext db, ILogger<LoggerMarker> log) =>
+        rolePerms.MapPut("/", async (int roleId, SetRolePermissionsRequest req, AppDbContext db, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/roles/{RoleId}/permissions — {Count} codes", roleId, req.Codes.Count);
 
@@ -106,6 +109,8 @@ public static class RoleEndpoints
 
             await db.SaveChangesAsync();
             log.LogInformation("Role {RoleId} permissions updated: {Count} permissions set", roleId, foundPerms.Count);
+            var roleName = await db.Roles.AsNoTracking().Where(r => r.Id == roleId).Select(r => r.Name).FirstOrDefaultAsync();
+            await audit.RecordAsync("role", roleId, "update", $"Permissions for role '{roleName}' updated ({foundPerms.Count} permissions)");
             return ApiResponse.Success(new { count = foundPerms.Count }, "Role permissions updated").ToResult();
         })
         .RequirePermission(Permissions.RolesManage);

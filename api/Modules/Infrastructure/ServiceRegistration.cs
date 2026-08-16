@@ -12,6 +12,7 @@ using InternetProvider.Api.Modules.RadAcct.Core;
 using InternetProvider.Api.Modules.RadPostAuth.Core;
 using InternetProvider.Api.Modules.Roles.Core;
 using InternetProvider.Api.Modules.Auth.Core;
+using InternetProvider.Api.Modules.Audit.Core;
 
 namespace InternetProvider.Api.Modules.Infrastructure.Core;
 
@@ -20,6 +21,7 @@ public static class ServiceRegistration
     public static void MapAllEndpoints(this WebApplication app)
     {
         AuthEndpoints.Map(app);
+        AuditEndpoints.Map(app);
         OrganizationEndpoints.Map(app);
         SettingsEndpoints.Map(app);
         UserEndpoints.Map(app);
