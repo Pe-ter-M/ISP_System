@@ -53,14 +53,13 @@ public static class CustomerEndpoints
         })
         .RequirePermission(Permissions.CustomersCreate);
 
-        group.MapPut("/{id:int}", async (int id, UpdateCustomerRequest req, ICustomerService service, IAuditService audit, ILogger<LoggerMarker> log) =>
+        group.MapPut("/{id:int}", async (int id, UpdateCustomerRequest req, ICustomerService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/customers/{CustomerId} — updating customer", id);
             try
             {
                 var customer = await service.UpdateAsync(id, req);
                 log.LogInformation("Customer {CustomerId} updated successfully", id);
-                await audit.RecordAsync("customer", id, "update", $"Customer '{customer.FullName}' updated");
                 return ApiResponse.Success(customer, "Customer updated successfully").ToResult();
             }
             catch (ConflictException ex)

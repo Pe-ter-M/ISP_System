@@ -2,6 +2,8 @@ using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Plans.Dtos;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Core.Models;
+using InternetProvider.Api.Modules.Audit.Interfaces;
+using InternetProvider.Api.Modules.Audit.Dtos;
 using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Plans.Core;
@@ -10,11 +12,13 @@ public class PlanService : IPlanService
 {
     private readonly IPlanRepository _repo;
     private readonly ILogger<PlanService> _log;
+    private readonly IAuditService _audit;
 
-    public PlanService(IPlanRepository repo, ILogger<PlanService> log)
+    public PlanService(IPlanRepository repo, ILogger<PlanService> log, IAuditService audit)
     {
         _repo = repo;
         _log = log;
+        _audit = audit;
     }
 
     public async Task<List<PlanSummaryResponse>> GetAllAsync(bool includeSubscribersCount = false)
@@ -272,6 +276,24 @@ public class PlanService : IPlanService
             throw new ConflictException($"A plan named '{request.Name}' already exists.");
         }
 
+        // ── Capture old->new field changes for the audit trail ──
+        // Plan updates are conditional: a null request field means "not provided",
+        // so we only record a field when it was actually sent AND differs.
+        var changes = new List<AuditChange>();
+        AddChange(changes, "Name", plan.Name, request.Name);
+        AddChange(changes, "Description", plan.Description, request.Description);
+        AddChange(changes, "Price", plan.PriceCents.ToString(), request.PriceCents?.ToString());
+        AddChange(changes, "Billing Cycle", plan.BillingCycle, request.BillingCycle);
+        AddChange(changes, "Upload (Kbps)", plan.BandwidthUpKbps?.ToString(), request.BandwidthUpKbps?.ToString());
+        AddChange(changes, "Download (Kbps)", plan.BandwidthDownKbps?.ToString(), request.BandwidthDownKbps?.ToString());
+        AddChange(changes, "Session Timeout (s)", plan.SessionTimeoutSeconds.ToString(), request.SessionTimeoutSeconds?.ToString());
+        AddChange(changes, "Idle Timeout (s)", plan.IdleTimeoutSeconds.ToString(), request.IdleTimeoutSeconds?.ToString());
+        AddChange(changes, "Max Devices", plan.MaxDevices.ToString(), request.MaxDevices?.ToString());
+        AddChange(changes, "Sort Order", plan.SortOrder.ToString(), request.SortOrder?.ToString());
+        AddChange(changes, "Active", plan.IsActive.ToString(), request.IsActive?.ToString());
+        // Drop entries where the new value was not provided (null request field).
+        changes = changes.Where(c => c.NewValue != null).ToList();
+
         if (request.Name != null) plan.Name = request.Name;
         if (request.Description != null) plan.Description = request.Description;
         if (request.PriceCents.HasValue) plan.PriceCents = request.PriceCents.Value;
@@ -285,6 +307,8 @@ public class PlanService : IPlanService
         if (request.IsActive.HasValue) plan.IsActive = request.IsActive.Value;
 
         await _repo.UpdatePlanWithPolicyAsync(plan);
+
+        await _audit.RecordAsync("plan", plan.Id, "update", $"Plan '{plan.Name}' updated", changes);
 
         return new PlanSummaryResponse
         {
@@ -317,6 +341,12 @@ public class PlanService : IPlanService
     private async Task SyncQos(RadiusPackage plan)
     {
         await _repo.SyncGroupPolicyAsync(plan);
+    }
+
+    private static void AddChange(List<AuditChange> changes, string field, string? oldValue, string? newValue)
+    {
+        if (!string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            changes.Add(new AuditChange(field, oldValue, newValue));
     }
 }
     

@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using InternetProvider.Api.Modules.Users.Core.Models;
 using InternetProvider.Api.Modules.Roles.Core.Models;
 using InternetProvider.Api.Modules.Infrastructure.Core;
+using InternetProvider.Api.Modules.Audit.Interfaces;
+using InternetProvider.Api.Modules.Audit.Dtos;
 using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Staff.Core;
@@ -14,12 +16,14 @@ public class StaffService : IStaffService
     private readonly IStaffRepository _repo;
     private readonly ILogger<StaffService> _log;
     private readonly AppDbContext _db;
+    private readonly IAuditService _audit;
 
-    public StaffService(IStaffRepository repo, ILogger<StaffService> log, AppDbContext db)
+    public StaffService(IStaffRepository repo, ILogger<StaffService> log, AppDbContext db, IAuditService audit)
     {
         _repo = repo;
         _log = log;
         _db = db;
+        _audit = audit;
     }
 
     public async Task<PaginatedResponse<StaffSummaryResponse>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc)
@@ -154,6 +158,17 @@ public class StaffService : IStaffService
         if (status is not ("active" or "inactive"))
             throw new ConflictException("Invalid staff status choice. Choose 'active' or 'inactive'.");
 
+        // ── Capture old->new field changes for the audit trail ──
+        var oldRoleId = user.RoleId;
+        var changes = new List<AuditChange>();
+        AddChange(changes, "Full Name", user.FullName, request.FullName);
+        AddChange(changes, "Email", user.Email, request.Email);
+        AddChange(changes, "Phone", user.Phone, request.Phone);
+        AddChange(changes, "Salary", staff.SalaryCents.ToString(), (request.SalaryCents ?? staff.SalaryCents).ToString());
+        AddChange(changes, "Employment Type", staff.EmploymentType, string.IsNullOrWhiteSpace(request.EmploymentType) ? "full-time" : request.EmploymentType);
+        AddChange(changes, "Notes", staff.Notes, request.Notes);
+        AddChange(changes, "Status", staff.Status, status);
+
         user.FullName = request.FullName;
         user.Email = request.Email;
         user.Phone = request.Phone;
@@ -173,7 +188,14 @@ public class StaffService : IStaffService
         await _db.SaveChangesAsync(); // persist the tracked user changes too
 
         _log.LogInformation("Staff member {StaffId} updated successfully", id);
+        await _audit.RecordAsync("staff", id, "update", $"Staff member '{user.FullName}' updated", changes);
         return MapSummary(staff);
+    }
+
+    private static void AddChange(List<AuditChange> changes, string field, string? oldValue, string? newValue)
+    {
+        if (!string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            changes.Add(new AuditChange(field, oldValue, newValue));
     }
 
     public async Task<DeleteStaffResult> DeleteAsync(int id)

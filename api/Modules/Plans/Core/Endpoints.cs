@@ -85,12 +85,11 @@ public static class PlanEndpoints
         })
         .RequirePermission(Permissions.PlansCreate);
 
-        adminGroup.MapPut("/{id:int}", async (int id, UpdatePlanRequest req, IPlanService service, IAuditService audit, ILogger<LoggerMarker> log) =>
+        adminGroup.MapPut("/{id:int}", async (int id, UpdatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/admin/plans/{PlanId} called", id);
             var plan = await service.UpdateAsync(id, req);
             log.LogInformation("Plan {PlanId} updated successfully", id);
-            await audit.RecordAsync("plan", id, "update", $"Plan '{plan.Name}' updated");
             return ApiResponse.Success(plan, "Plan updated successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansUpdate);

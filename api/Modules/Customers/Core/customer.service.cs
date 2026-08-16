@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using InternetProvider.Api.Modules.Users.Core.Models;
 using InternetProvider.Api.Modules.Roles.Core.Models;
 using InternetProvider.Api.Modules.Infrastructure.Core;
+using InternetProvider.Api.Modules.Audit.Interfaces;
+using InternetProvider.Api.Modules.Audit.Dtos;
 using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Customers.Core;
@@ -14,12 +16,14 @@ public class CustomerService : ICustomerService
     private readonly ICustomerRepository _repo;
     private readonly ILogger<CustomerService> _log;
     private readonly AppDbContext _db;
+    private readonly IAuditService _audit;
 
-    public CustomerService(ICustomerRepository repo, ILogger<CustomerService> log, AppDbContext db)
+    public CustomerService(ICustomerRepository repo, ILogger<CustomerService> log, AppDbContext db, IAuditService audit)
     {
         _repo = repo;
         _log = log;
         _db = db;
+        _audit = audit;
     }
 
     public async Task<PaginatedResponse<CustomerSummaryResponse>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc, string? subscription = null)
@@ -222,6 +226,21 @@ public class CustomerService : ICustomerService
         if (status is not ("active" or "inactive"))
             throw new ConflictException("Invalid customer status choice. Choose 'active' or 'inactive'.");
 
+        // ── Capture old->new field changes for the audit trail ──
+        var changes = new List<AuditChange>();
+        AddChange(changes, "Full Name", user.FullName, request.FullName);
+        AddChange(changes, "Email", user.Email, request.Email);
+        AddChange(changes, "Phone", user.Phone, request.Phone);
+        AddChange(changes, "Business Name", customer.BusinessName, request.BusinessName);
+        AddChange(changes, "Customer Type", customer.CustomerType, string.IsNullOrWhiteSpace(request.CustomerType) ? "residential" : request.CustomerType);
+        AddChange(changes, "Service Address", customer.ServiceAddress, request.ServiceAddress);
+        AddChange(changes, "City", customer.City, request.City);
+        AddChange(changes, "Region", customer.Region, request.Region);
+        AddChange(changes, "GPS Lat", customer.GpsLat?.ToString(), request.GpsLat?.ToString());
+        AddChange(changes, "GPS Lng", customer.GpsLng?.ToString(), request.GpsLng?.ToString());
+        AddChange(changes, "Status", customer.Status, status);
+        AddChange(changes, "Notes", customer.Notes, request.Notes);
+
         user.FullName = request.FullName;
         user.Email = request.Email;
         user.Phone = request.Phone;
@@ -242,7 +261,14 @@ public class CustomerService : ICustomerService
         await _db.SaveChangesAsync(); // persist the tracked user changes too
 
         _log.LogInformation("Customer {CustomerId} updated successfully", id);
+        await _audit.RecordAsync("customer", id, "update", $"Customer '{user.FullName}' updated", changes);
         return await BuildSummaryAsync(customer);
+    }
+
+    private static void AddChange(List<AuditChange> changes, string field, string? oldValue, string? newValue)
+    {
+        if (!string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            changes.Add(new AuditChange(field, oldValue, newValue));
     }
 
     public async Task<DeleteCustomerResult> DeleteAsync(int id)
