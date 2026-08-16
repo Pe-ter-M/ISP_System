@@ -467,6 +467,7 @@ async function submitEdit() {
     const updated = await updateSubscription(editingSub.value.id, payload)
     const idx = subs.value.findIndex(x => x.id === updated.id)
     if (idx !== -1) subs.value[idx] = updated
+    editSaving.value = false // allow closeEdit() to proceed before showing the toast
     closeEdit()
     toast.success(`Subscription for ${updated.customerFullName} updated`)
     fetchStats()
