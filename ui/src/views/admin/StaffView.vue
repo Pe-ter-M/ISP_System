@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff, getStaffStats } from '@/services/staff.service'
 import { getRoles, getRolePermissions } from '@/services/role.service'
 import { getUserById, getPermissions, updateUserPermissions } from '@/services/user.service'
+import { computeInvalidCodes } from '@/utils/permissions'
 import { formatPrice } from '@/types/plan.types'
 import { useToastStore } from '@/stores/toast.store'
 import { useSettingsStore } from '@/stores/settings.store'
@@ -459,21 +460,31 @@ async function ensurePermsLoaded(s: StaffSummary) {
   }
 }
 
-/** Visual state of one permission: granted by role, extra (added), revoked (default disabled), or off */
-function permState(code: string): 'role' | 'extra' | 'revoked' | 'off' {
+/** Codes that are selected (effective) but invalid — non-view permission without its resource view. */
+const invalidCodes = computed(() =>
+  computeInvalidCodes(
+    Object.entries(effectivePerms.value).filter(([, on]) => on).map(([c]) => c),
+    allPermissions.value.map(p => p.code),
+  ),
+)
+
+/** Visual state of one permission: granted by role, extra (added), revoked (default disabled), invalid, or off */
+function permState(code: string): 'role' | 'extra' | 'revoked' | 'invalid' | 'off' {
   const on = effectivePerms.value[code] ?? false
   const inRole = roleDefaultCodes.value.has(code)
+  if (on && invalidCodes.value.has(code)) return 'invalid'
   if (inRole && on) return 'role'
   if (!inRole && on) return 'extra'
   if (inRole && !on) return 'revoked'
   return 'off'
 }
 
-function permChipClass(state: 'role' | 'extra' | 'revoked' | 'off'): string {
+function permChipClass(state: 'role' | 'extra' | 'revoked' | 'invalid' | 'off'): string {
   switch (state) {
     case 'role': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
     case 'extra': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 ring-1 ring-blue-400/60 dark:ring-blue-700'
     case 'revoked': return 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 line-through'
+    case 'invalid': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 ring-1 ring-red-400/60 dark:ring-red-700'
     default: return 'bg-gray-100 text-gray-400 dark:bg-gray-800/60 dark:text-gray-600'
   }
 }
@@ -507,6 +518,7 @@ function shortCode(code: string): string {
 }
 
 function togglePerm(code: string) {
+  permsError.value = ''
   effectivePerms.value[code] = !(effectivePerms.value[code] ?? false)
 }
 
@@ -1211,6 +1223,24 @@ function cancelDelete() {
 
           <p v-if="permsError" class="mt-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{{ permsError }}</p>
 
+          <!-- Invalid permissions warning (view-first rule) -->
+          <div
+            v-if="invalidCodes.size > 0"
+            class="mt-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3"
+          >
+            <p class="text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <span>
+                <span class="font-semibold">Save blocked:</span>
+                these need their resource view granted first:
+                <span class="font-mono">{{ [...invalidCodes].join(', ') }}</span>.
+                Add the matching view, or deselect them, to proceed.
+              </span>
+            </p>
+          </div>
+
           <div class="flex gap-3 mt-5">
             <button type="button" @click="resetPermsToRole" :disabled="permsSaving"
               class="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer disabled:opacity-40">
@@ -1221,7 +1251,7 @@ function cancelDelete() {
               class="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer disabled:opacity-40">
               Cancel
             </button>
-            <button type="button" @click="savePerms" :disabled="permsSaving"
+            <button type="button" @click="savePerms" :disabled="permsSaving || invalidCodes.size > 0"
               class="px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
               <span v-if="permsSaving" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               Save Permissions

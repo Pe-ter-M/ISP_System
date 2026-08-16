@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { getRoles, createRole, deleteRole, getRolePermissions, setRolePermissions } from '@/services/role.service'
 import { getPermissions } from '@/services/user.service'
+import { computeInvalidCodes } from '@/utils/permissions'
 import FieldTip from '@/components/FieldTip.vue'
 import type { Role, RolePermission } from '@/types/role.types'
 import type { Permission } from '@/types/user.types'
@@ -38,6 +39,11 @@ const pendingCodes = ref<Set<string>>(new Set())
 const saveLoading = ref(false)
 const saveError = ref('')
 const saveSuccess = ref(false)
+
+/** Codes currently selected that are invalid (non-view permission without its resource view). */
+const invalidCodes = computed(() =>
+  computeInvalidCodes(pendingCodes.value, allPermissions.value.map(p => p.code)),
+)
 
 // ── Fetch ──
 async function fetchRoles() {
@@ -168,6 +174,17 @@ const changesCount = computed(() => {
   for (const c of orig) if (!pendingCodes.value.has(c)) diff++
   return diff
 })
+
+/** Chip styling: selected+valid green, selected+invalid red, unselected neutral. */
+function permChipClass(code: string): string {
+  if (pendingCodes.value.has(code)) {
+    if (invalidCodes.value.has(code)) {
+      return 'bg-red-100 border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/50'
+    }
+    return 'bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
+  }
+  return 'bg-transparent border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+}
 
 async function savePerms() {
   if (!selectedRole.value) return
@@ -401,7 +418,7 @@ const roleBadgeClass = (name: string) => ({
                   class="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">
                   Cancel
                 </button>
-                <button @click="savePerms" :disabled="saveLoading || changesCount === 0"
+                <button @click="savePerms" :disabled="saveLoading || changesCount === 0 || invalidCodes.size > 0"
                   class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition flex items-center gap-1.5 cursor-pointer">
                   <span v-if="saveLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                   {{ saveLoading ? 'Saving…' : 'Save' }}
@@ -493,6 +510,24 @@ const roleBadgeClass = (name: string) => ({
                   </div>
                 </div>
 
+                <!-- Invalid permissions warning (view-first rule) -->
+                <div
+                  v-if="invalidCodes.size > 0"
+                  class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3"
+                >
+                  <p class="text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
+                    <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    <span>
+                      <span class="font-semibold">Save blocked:</span>
+                      these need their resource view granted first:
+                      <span class="font-mono">{{ [...invalidCodes].join(', ') }}</span>.
+                      Add the matching view, or deselect them, to proceed.
+                    </span>
+                  </p>
+                </div>
+
                 <!-- Permission toggles grouped -->
                 <div class="space-y-4">
                   <div v-for="(perms, group) in groupedAllPermissions" :key="group">
@@ -504,9 +539,7 @@ const roleBadgeClass = (name: string) => ({
                         @click="toggleCode(perm.code)"
                         :title="perm.description"
                         class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150 cursor-pointer select-none flex items-center gap-1"
-                        :class="pendingCodes.has(perm.code)
-                          ? 'bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/50'
-                          : 'bg-transparent border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'"
+                        :class="permChipClass(perm.code)"
                       >
                         <span class="opacity-80 text-[10px] leading-none">{{ pendingCodes.has(perm.code) ? '✓' : '+' }}</span>
                         {{ perm.code.split('.')[1] }}
@@ -523,7 +556,8 @@ const roleBadgeClass = (name: string) => ({
                 <!-- Bottom bar -->
                 <div class="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800">
                   <p class="text-xs text-gray-400 dark:text-gray-500">
-                    <span v-if="changesCount === 0">No changes yet</span>
+                    <span v-if="invalidCodes.size > 0">{{ invalidCodes.size }} invalid permission{{ invalidCodes.size === 1 ? '' : 's' }} (need view)</span>
+                    <span v-else-if="changesCount === 0">No changes yet</span>
                     <span v-else class="text-blue-600 dark:text-blue-400 font-medium">{{ changesCount }} pending change{{ changesCount !== 1 ? 's' : '' }}</span>
                   </p>
                   <div class="flex gap-2">
@@ -531,7 +565,7 @@ const roleBadgeClass = (name: string) => ({
                       class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer">
                       Cancel
                     </button>
-                    <button @click="savePerms" :disabled="saveLoading || changesCount === 0"
+                    <button @click="savePerms" :disabled="saveLoading || changesCount === 0 || invalidCodes.size > 0"
                       class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition flex items-center gap-1.5 cursor-pointer">
                       <span v-if="saveLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                       {{ saveLoading ? 'Saving…' : 'Save Changes' }}

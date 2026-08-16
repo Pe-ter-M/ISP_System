@@ -146,6 +146,24 @@ public class UserService : IUserService
         if (unknown.Count > 0)
             throw new BadRequestException($"Unknown permission codes: {string.Join(", ", unknown)}");
 
+        // Compute the effective permission set (role defaults applied with overrides)
+        // and enforce the view-first rule: every non-view permission needs its view.
+        var roleDefaultCodes = await _db.RolePermissions
+            .Where(rp => rp.RoleId == user.RoleId)
+            .Join(_db.Permissions, rp => rp.PermissionId, p => p.Id, (_, p) => p.Code)
+            .ToListAsync();
+
+        var effective = roleDefaultCodes.ToHashSet();
+        foreach (var o in request.Overrides)
+        {
+            if (o.IsGranted) effective.Add(o.Code);
+            else effective.Remove(o.Code);
+        }
+
+        var dependencyError = Permissions.ValidateViewDependency(effective);
+        if (dependencyError != null)
+            throw new BadRequestException(dependencyError);
+
         // Replace all overrides atomically
         var existing = _db.UserPermissions.Where(up => up.UserId == userId);
         _db.UserPermissions.RemoveRange(existing);

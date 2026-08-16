@@ -101,6 +101,11 @@ public static class RoleEndpoints
             if (unknown.Count > 0)
                 return ApiResponse.Error($"Unknown permission codes: {string.Join(", ", unknown)}", 400).ToResult();
 
+            // Enforce view-first rule: every non-view permission needs its resource's view.
+            var dependencyError = Permissions.ValidateViewDependency(req.Codes);
+            if (dependencyError != null)
+                return ApiResponse.Error(dependencyError, 400).ToResult();
+
             var existing = db.RolePermissions.Where(rp => rp.RoleId == roleId);
             db.RolePermissions.RemoveRange(existing);
 
