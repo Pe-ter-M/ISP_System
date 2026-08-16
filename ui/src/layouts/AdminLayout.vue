@@ -49,7 +49,7 @@ function closeSidebar() {
 
 function goProfile() {
   closeSidebar()
-  router.push('/admin/profile')
+  router.push('/dashboard/profile')
 }
 </script>
 

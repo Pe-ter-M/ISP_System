@@ -20,14 +20,14 @@ const router = createRouter({
 
     // ── Admin app (sidebar, no public header/footer) ──
     {
-      path: '/admin',
+      path: '/dashboard',
       component: () => import('../layouts/AdminLayout.vue'),
       meta: { requiresAuth: true },
-      redirect: '/admin/dashboard',
+      redirect: '/dashboard/dashboard',
       children: [
         { path: 'dashboard', name: 'dashboard', component: () => import('../views/admin/DashboardView.vue'), meta: { title: 'Dashboard' } },
         { path: 'profile', name: 'profile', component: () => import('../views/admin/ProfileView.vue'), meta: { title: 'Profile' } },
-        { path: 'customers', redirect: '/admin/users/customers' },
+        { path: 'customers', redirect: '/dashboard/users/customers' },
         { path: 'subscriptions', name: 'subscriptions', component: () => import('../views/admin/SubscriptionsView.vue'), meta: { title: 'Subscriptions', requiresPermission: 'subscription.view' } },
         { path: 'plans', name: 'admin-plans', component: () => import('../views/admin/PlansView.vue'), meta: { title: 'Plans', requiresPermission: 'plan.view' } },
         { path: 'sessions', name: 'sessions', component: () => import('../views/admin/PlaceholderView.vue'), meta: { title: 'Live Sessions', requiresPermission: 'session.view' } },
@@ -68,13 +68,13 @@ router.beforeEach((to, _from, next) => {
       const fallback = firstPermittedRoute(auth.userPermissions)
       // Avoid a redirect loop when the user somehow reaches a route they can't
       // see but also has no permitted fallback at all.
-      return next(fallback && fallback !== to.path ? fallback : '/admin/profile')
+      return next(fallback && fallback !== to.path ? fallback : '/dashboard/profile')
     }
   }
 
-  // 4. `/admin` with no explicit child — send to the first permitted route
-  if (to.path === '/admin') {
-    return next(firstPermittedRoute(auth.userPermissions) || '/admin/profile')
+  // 4. `/dashboard` with no explicit child — send to the first permitted route
+  if (to.path === '/dashboard') {
+    return next(firstPermittedRoute(auth.userPermissions) || '/dashboard/profile')
   }
 
   next()

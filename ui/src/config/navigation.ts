@@ -39,21 +39,21 @@ const I = {
 export const navSections: NavSection[] = [
   {
     items: [
-      { label: 'Dashboard', path: '/admin/dashboard', icon: I.dashboard, permissions: ['*'] },
+      { label: 'Dashboard', path: '/dashboard/dashboard', icon: I.dashboard, permissions: ['*'] },
     ],
   },
   {
     label: 'Management',
     items: [
-      { label: 'Subscriptions', path: '/admin/subscriptions', icon: I.subscriptions, permissions: ['subscription.view'] },
-      { label: 'Plans', path: '/admin/plans', icon: I.plans, permissions: ['plan.view'] },
+      { label: 'Subscriptions', path: '/dashboard/subscriptions', icon: I.subscriptions, permissions: ['subscription.view'] },
+      { label: 'Plans', path: '/dashboard/plans', icon: I.plans, permissions: ['plan.view'] },
     ],
   },
   {
     label: 'RADIUS',
     items: [
-      { label: 'Live Sessions', path: '/admin/sessions', icon: I.sessions, permissions: ['session.view'] },
-      { label: 'NAS Clients', path: '/admin/nas', icon: I.radius, permissions: ['radius.nas.manage'] },
+      { label: 'Live Sessions', path: '/dashboard/sessions', icon: I.sessions, permissions: ['session.view'] },
+      { label: 'NAS Clients', path: '/dashboard/nas', icon: I.radius, permissions: ['radius.nas.manage'] },
     ],
   },
   {
@@ -61,17 +61,17 @@ export const navSections: NavSection[] = [
     items: [
       {
         label: 'Users',
-        path: '/admin/users',
+        path: '/dashboard/users',
         icon: I.users,
         permissions: ['users.view'],
         children: [
-          { label: 'Customers', path: '/admin/users/customers', permissions: ['customer.view'] },
-          { label: 'Staff', path: '/admin/users/staff', permissions: ['staff.view'] },
+          { label: 'Customers', path: '/dashboard/users/customers', permissions: ['customer.view'] },
+          { label: 'Staff', path: '/dashboard/users/staff', permissions: ['staff.view'] },
         ],
       },
-      { label: 'Roles', path: '/admin/roles', icon: I.roles, permissions: ['role.manage'] },
-      { label: 'Audit Log', path: '/admin/audit', icon: I.audit, permissions: ['audit.view'] },
-      { label: 'Settings', path: '/admin/settings', icon: I.settings, permissions: ['settings.view'] },
+      { label: 'Roles', path: '/dashboard/roles', icon: I.roles, permissions: ['role.manage'] },
+      { label: 'Audit Log', path: '/dashboard/audit', icon: I.audit, permissions: ['audit.view'] },
+      { label: 'Settings', path: '/dashboard/settings', icon: I.settings, permissions: ['settings.view'] },
     ],
   },
 ]
