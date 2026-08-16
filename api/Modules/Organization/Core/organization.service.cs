@@ -1,16 +1,19 @@
 using InternetProvider.Api.Modules.Organization.Dtos;
 using InternetProvider.Api.Modules.Organization.Interfaces;
+using InternetProvider.Api.Modules.Settings.Interfaces;
 
 namespace InternetProvider.Api.Modules.Organization.Core;
 
 public class OrganizationService : IOrganizationService
 {
     private readonly IOrganizationRepository _repo;
+    private readonly ISettingRepository _settingsRepo;
     private readonly ILogger<OrganizationService> _log;
 
-    public OrganizationService(IOrganizationRepository repo, ILogger<OrganizationService> log)
+    public OrganizationService(IOrganizationRepository repo, ISettingRepository settingsRepo, ILogger<OrganizationService> log)
     {
         _repo = repo;
+        _settingsRepo = settingsRepo;
         _log = log;
     }
 
@@ -18,7 +21,39 @@ public class OrganizationService : IOrganizationService
     {
         _log.LogDebug("Getting organization");
         var org = await _repo.GetAsync();
-        return org == null ? null : MapToResponse(org);
+        if (org == null) return null;
+
+        var response = MapToResponse(org);
+
+        // Branding overrides from the dynamic settings table — a different ISP can
+        // set its own name/contact/currency in Settings without code changes.
+        async Task<string?> GetSettingValueAsync(string key)
+        {
+            var s = await _settingsRepo.GetByKeyAsync(key);
+            return string.IsNullOrWhiteSpace(s?.Value) ? null : s.Value.Trim();
+        }
+
+        response.Name = await GetSettingValueAsync("company_name") ?? response.Name;
+        response.ShortName = await GetSettingValueAsync("company_short_name") ?? response.ShortName;
+        response.SupportPhone = await GetSettingValueAsync("company_phone") ?? response.SupportPhone;
+        response.SupportEmail = await GetSettingValueAsync("company_email") ?? response.SupportEmail;
+        response.Address = await GetSettingValueAsync("company_address") ?? response.Address;
+
+        var currency = await GetSettingValueAsync("currency");
+        if (currency != null)
+        {
+            response.Currency = currency;
+            response.CurrencySymbol = currency.ToUpperInvariant() switch
+            {
+                "KES" or "KSH" => "KSh",
+                "USD" => "$",
+                "EUR" => "€",
+                "GBP" => "£",
+                _ => response.CurrencySymbol
+            };
+        }
+
+        return response;
     }
 
     public async Task<OrganizationResponse?> UpdateAsync(UpdateOrganizationRequest request)

@@ -1,3 +1,5 @@
+using InternetProvider.Api.Common;
+
 namespace InternetProvider.Api.Modules.Customers.Dtos;
 
 public class CustomerSummaryResponse
@@ -12,7 +14,12 @@ public class CustomerSummaryResponse
     public string Phone { get; set; } = string.Empty;
     public string? City { get; set; }
     public string? Region { get; set; }
+    public double? GpsLat { get; set; }
+    public double? GpsLng { get; set; }
+    public string UsernamePpoe { get; set; } = string.Empty;
+    public string PasswordPpoe { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
+    public bool HasActiveSubscription { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -31,8 +38,11 @@ public class CustomerDetailResponse
     public string? Region { get; set; }
     public double? GpsLat { get; set; }
     public double? GpsLng { get; set; }
+    public string UsernamePpoe { get; set; } = string.Empty;
+    public string PasswordPpoe { get; set; } = string.Empty;
     public string Status { get; set; } = "active";
     public string? Notes { get; set; }
+    public bool HasActiveSubscription { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<CustomerSubscriptionDto> Subscriptions { get; set; } = new();
@@ -41,19 +51,11 @@ public class CustomerDetailResponse
 public class CustomerSubscriptionDto
 {
     public int Id { get; set; }
+    public int PackageId { get; set; }
     public string Username { get; set; } = string.Empty;
     public string PlanName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime? CurrentPeriodEnd { get; set; }
-}
-
-public class PaginatedResponse<T>
-{
-    public List<T> Items { get; set; } = new();
-    public int TotalCount { get; set; }
-    public int Page { get; set; }
-    public int PageSize { get; set; }
-    public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
 }
 
 public record CreateCustomerRequest(
@@ -65,5 +67,7 @@ public record CreateCustomerRequest(
     string? CustomerType,
     string? ServiceAddress,
     string? City,
-    string? Region
+    string? Region,
+    double? GpsLat,
+    double? GpsLng
 );

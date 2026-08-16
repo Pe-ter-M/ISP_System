@@ -1,9 +1,11 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Users.Interfaces;
 using InternetProvider.Api.Modules.Users.Dtos;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Users.Core;
 
@@ -41,20 +43,12 @@ public static class UserEndpoints
         group.MapGet("/{id:int}", async (int id, IUserService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/users/{UserId} called", id);
-
-            try
-            {
-                var user = await service.GetByIdAsync(id);
-                return ApiResponse.Success(user, "User found").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                return ApiResponse.Error("User not found", 404).ToResult();
-            }
+            var user = await service.GetByIdAsync(id);
+            return ApiResponse.Success(user, "User found").ToResult();
         })
         .RequirePermission(Permissions.UsersView);
 
-        group.MapPost("/", async (CreateUserRequest req, IUserService service, ILogger<LoggerMarker> log) =>
+        group.MapPost("/", async (CreateUserRequest req, IUserService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/users — creating user {Email}", req.Email);
 
@@ -62,6 +56,7 @@ public static class UserEndpoints
             {
                 var user = await service.CreateAsync(req);
                 log.LogInformation("Created user {UserId} — {Email}", user.Id, user.Email);
+                await audit.RecordAsync("user", user.Id, "create", $"User '{user.FullName}' ({user.Email}) created");
                 return ApiResponse.Created(user, "User created successfully").ToResult();
             }
             catch (ConflictException ex)
@@ -70,5 +65,17 @@ public static class UserEndpoints
             }
         })
         .RequirePermission(Permissions.UsersCreate);
+
+        group.MapPut("/{id:int}/permissions", async (int id, UpdateUserPermissionsRequest req, HttpContext ctx, IUserService service, IAuditService audit, ILogger<LoggerMarker> log) =>
+        {
+            var principal = ctx.Items["User"] as ClaimsPrincipal;
+            var callerId = int.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var cid) ? (int?)cid : null;
+
+            log.LogInformation("PUT /api/users/{UserId}/permissions — {Count} overrides by caller {CallerId}", id, req.Overrides.Count, callerId);
+            var result = await service.UpdatePermissionsAsync(id, req, callerId);
+            await audit.RecordAsync("user", id, "update", $"Permissions for user #{id} updated ({req.Overrides.Count} overrides)");
+            return ApiResponse.Success(result, "Permissions updated").ToResult();
+        })
+        .RequirePermission(Permissions.RolesManage);
     }
 }

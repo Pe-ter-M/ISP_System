@@ -1,9 +1,14 @@
 export interface NavItem {
   label: string
   path: string
-  icon: string
+  icon?: string
   /** Show for ANY of these permissions. ['*'] = all authenticated users. */
   permissions?: string[]
+  /** Optional sub-items rendered as a collapsible dropdown under this item */
+  children?: NavItem[]
+  /** For parents with children: true when the user can open the parent's own page.
+   *  When false, the parent is rendered as a plain heading + dropdown only (no link). */
+  parentLinkAllowed?: boolean
 }
 
 export interface NavSection {
@@ -34,44 +39,68 @@ const I = {
 export const navSections: NavSection[] = [
   {
     items: [
-      { label: 'Dashboard', path: '/admin/dashboard', icon: I.dashboard, permissions: ['*'] },
+      { label: 'Dashboard', path: '/dashboard/dashboard', icon: I.dashboard, permissions: ['*'] },
     ],
   },
   {
     label: 'Management',
     items: [
-      { label: 'Customers', path: '/admin/customers', icon: I.customers, permissions: ['customer.view'] },
-      { label: 'Subscriptions', path: '/admin/subscriptions', icon: I.subscriptions, permissions: ['subscription.view'] },
-      { label: 'Plans', path: '/admin/plans', icon: I.plans, permissions: ['plan.view'] },
+      { label: 'Subscriptions', path: '/dashboard/subscriptions', icon: I.subscriptions, permissions: ['subscription.view'] },
+      { label: 'Plans', path: '/dashboard/plans', icon: I.plans, permissions: ['plan.view'] },
     ],
   },
   {
     label: 'RADIUS',
     items: [
-      { label: 'Live Sessions', path: '/admin/sessions', icon: I.sessions, permissions: ['session.view'] },
-      { label: 'NAS Clients', path: '/admin/nas', icon: I.radius, permissions: ['radius.nas.manage'] },
+      { label: 'Live Sessions', path: '/dashboard/sessions', icon: I.sessions, permissions: ['session.view'] },
+      { label: 'NAS Clients', path: '/dashboard/nas', icon: I.radius, permissions: ['radius.nas.manage'] },
     ],
   },
   {
     label: 'System',
     items: [
-      { label: 'Users', path: '/admin/users', icon: I.users, permissions: ['users.view'] },
-      { label: 'Roles', path: '/admin/roles', icon: I.roles, permissions: ['role.manage'] },
-      { label: 'Audit Log', path: '/admin/audit', icon: I.audit, permissions: ['audit.view'] },
-      { label: 'Settings', path: '/admin/settings', icon: I.settings, permissions: ['settings.view'] },
+      {
+        label: 'Users',
+        path: '/dashboard/users',
+        icon: I.users,
+        permissions: ['users.view'],
+        children: [
+          { label: 'Customers', path: '/dashboard/users/customers', permissions: ['customer.view'] },
+          { label: 'Staff', path: '/dashboard/users/staff', permissions: ['staff.view'] },
+        ],
+      },
+      { label: 'Roles', path: '/dashboard/roles', icon: I.roles, permissions: ['role.manage'] },
+      { label: 'Audit Log', path: '/dashboard/audit', icon: I.audit, permissions: ['audit.view'] },
+      { label: 'Settings', path: '/dashboard/settings', icon: I.settings, permissions: ['settings.view'] },
     ],
   },
 ]
 
 /** Filter nav sections based on user permissions. Returns only sections + items the user can see. */
 export function getFilteredNav(userPermissions: string[]) {
+  const hasAny = (perms?: string[]) => !perms || perms.includes('*') || perms.some((p) => userPermissions.includes(p))
+
   return navSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => {
-        if (!item.permissions || item.permissions.includes('*')) return true
-        return item.permissions.some((p) => userPermissions.includes(p))
-      }),
+      items: section.items
+        .map((item) => {
+          if (item.children && item.children.length > 0) {
+            const children = item.children.filter((c) => hasAny(c.permissions))
+            const parentAllowed = hasAny(item.permissions)
+            if (parentAllowed) {
+              // User can open the parent's own page — always show it. Children
+              // are the visible subset (may be empty when only users.view is held).
+              return { ...item, children, parentLinkAllowed: true }
+            }
+            // Parent's own page not permitted: show it only if a child is visible
+            // (e.g. customer.view without users.view → heading + Customers dropdown).
+            if (children.length === 0) return null
+            return { ...item, children, parentLinkAllowed: false }
+          }
+          return hasAny(item.permissions) ? item : null
+        })
+        .filter((item): item is NavItem => item !== null),
     }))
     .filter((section) => section.items.length > 0)
 }

@@ -1,3 +1,15 @@
+export interface Permission {
+  id: number
+  code: string
+  group: string
+  description: string
+}
+
+export interface PermissionOverride {
+  code: string
+  isGranted: boolean
+}
+
 export interface UserDetail {
   id: number
   email: string
@@ -7,6 +19,9 @@ export interface UserDetail {
   roleName: string
   isActive: boolean
   createdAt: string
+  updatedAt?: string
+  permissions?: string[]
+  permissionOverrides?: PermissionOverride[]
 }
 
 export interface PaginatedUsers {

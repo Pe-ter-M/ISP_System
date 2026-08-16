@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Users.Core.Models;
 using InternetProvider.Api.Modules.Users.Interfaces;
-using InternetProvider.Api.Modules.Users.Dtos;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 
 namespace InternetProvider.Api.Modules.Users.Core;

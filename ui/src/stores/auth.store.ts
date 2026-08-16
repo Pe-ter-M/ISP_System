@@ -17,6 +17,22 @@ export const useAuthStore = defineStore('auth', () => {
   const userName = computed(() => user.value?.fullName ?? '')
   const userEmail = computed(() => user.value?.email ?? '')
 
+  /**
+   * Permission helpers — the single source of truth for UI-level access.
+   * `'*'` always passes (global permission), otherwise the exact code must be
+   * present in the user's permission set. Reactive: as permissions change the
+   * result updates, so buttons can hide/show when a role is edited.
+   */
+  function can(permission: string): boolean {
+    if (!permission || permission === '*') return true
+    return userPermissions.value.includes(permission)
+  }
+
+  /** True if the user has ANY of the given permissions. */
+  function canAny(permissions: string[]): boolean {
+    return permissions.some((p) => can(p))
+  }
+
   async function login(email: string, password: string) {
     const res = await api.post('/auth/login', { email, password })
     const data = res.data as LoginResponse
@@ -72,6 +88,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     token, user,
     isAuthenticated, userPermissions, userRole, userName, userEmail,
+    can, canAny,
     login, logout, restoreSession,
   }
 })

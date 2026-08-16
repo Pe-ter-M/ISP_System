@@ -43,15 +43,23 @@ const cardColors = [
 ]
 
 function getColor(index: number) {
-  return cardColors[index % cardColors.length]
+  return cardColors[index % cardColors.length]!
 }
 
 // ── Actions ──
+function retryLoad() {
+  loading.value = true
+  error.value = null
+  getPlans()
+    .then(d => { plans.value = d })
+    .catch(() => { error.value = 'Failed to load plans' })
+    .finally(() => { loading.value = false })
+}
 onMounted(async () => {
   try {
     plans.value = await getPlans()
-  } catch (e: any) {
-    error.value = e?.message || 'Failed to load plans'
+  } catch (e: unknown) {
+    error.value = (e as { message?: string } | null)?.message || 'Failed to load plans'
   } finally {
     loading.value = false
   }
@@ -67,7 +75,7 @@ async function openModal(id: number) {
   modalLoading.value = true
   try {
     selectedPlan.value = await getPlanDetail(id)
-  } catch (e: any) {
+  } catch {
     selectedPlan.value = null
   } finally {
     modalLoading.value = false
@@ -118,7 +126,7 @@ function formatDuration(seconds: number): string {
         <p class="text-red-600 dark:text-red-300 text-lg font-medium">Failed to load plans</p>
         <p class="text-red-500 dark:text-red-400 text-sm mt-2">{{ error }}</p>
         <button
-          @click="loading = true; error = null; getPlans().then(d => plans.value = d).catch(e => error = e.message).finally(() => loading = false)"
+          @click="retryLoad"
           class="mt-4 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all"
         >
           Retry

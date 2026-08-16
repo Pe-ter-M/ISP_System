@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Plans.Core.Models;
+using InternetProvider.Api.Modules.Plans.Dtos;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Infrastructure.Core;
+using InternetProvider.Api.Modules.Radius.Core.Models;
 
 namespace InternetProvider.Api.Modules.Plans.Core;
 
@@ -28,6 +31,96 @@ public class PlanRepository : IPlanRepository
         return plans;
     }
 
+    public async Task<PaginatedResponse<RadiusPackage>> GetAllPagedAsync(
+        int page = 1, int pageSize = 10, string? search = null, string? status = null,
+        string? sortBy = null, bool sortDesc = false)
+    {
+        _log.LogDebug("Fetching plans page {Page} size {PageSize} search '{Search}' status '{Status}' sort {SortBy}", page, pageSize, search, status, sortBy);
+
+        var query = ApplyFilters(_db.RadiusPackages.AsQueryable(), search, status);
+
+        // ── Sort (DB columns only; 'subscribers' is resolved in the service) ──
+        query = (sortBy?.ToLower()) switch
+        {
+            "name" => sortDesc ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+            "price" or "pricecents" => sortDesc ? query.OrderByDescending(p => p.PriceCents) : query.OrderBy(p => p.PriceCents),
+            "cycle" or "billingcycle" => sortDesc ? query.OrderByDescending(p => p.BillingCycle) : query.OrderBy(p => p.BillingCycle),
+            "speed" or "bandwidthdown" or "bandwidthdownkbps" => sortDesc ? query.OrderByDescending(p => p.BandwidthDownKbps) : query.OrderBy(p => p.BandwidthDownKbps),
+            "devices" or "maxdevices" => sortDesc ? query.OrderByDescending(p => p.MaxDevices) : query.OrderBy(p => p.MaxDevices),
+            "active" or "isactive" => sortDesc ? query.OrderByDescending(p => p.IsActive) : query.OrderBy(p => p.IsActive),
+            "sortorder" => sortDesc ? query.OrderByDescending(p => p.SortOrder) : query.OrderBy(p => p.SortOrder),
+            _ => query.OrderBy(p => p.SortOrder).ThenBy(p => p.Id)
+        };
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        _log.LogDebug("Fetched {Count}/{Total} plans (page {Page}, size {PageSize})", items.Count, totalCount, page, pageSize);
+        return new PaginatedResponse<RadiusPackage>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<List<RadiusPackage>> GetFilteredAsync(string? search = null, string? status = null)
+    {
+        _log.LogDebug("Fetching all plans matching search '{Search}' status '{Status}'", search, status);
+
+        var plans = await ApplyFilters(_db.RadiusPackages.AsQueryable(), search, status)
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Id)
+            .ToListAsync();
+
+        _log.LogDebug("Found {Count} matching plans", plans.Count);
+        return plans;
+    }
+
+    public async Task<PlanStatsResponse> GetStatsAsync()
+    {
+        _log.LogDebug("Computing plan stats");
+        var total = await _db.RadiusPackages.CountAsync();
+        var active = await _db.RadiusPackages.CountAsync(p => p.IsActive);
+        var subscribers = await _db.Subscriptions
+            .CountAsync(s => s.Status == "active" && _db.RadiusPackages.Any(p => p.Id == s.PackageId));
+
+        _log.LogDebug("Plan stats: {Total} total, {Active} active, {Subscribers} subscribers", total, active, subscribers);
+        return new PlanStatsResponse
+        {
+            TotalPlans = total,
+            ActivePlans = active,
+            InactivePlans = total - active,
+            TotalSubscribers = subscribers,
+        };
+    }
+
+    private IQueryable<RadiusPackage> ApplyFilters(IQueryable<RadiusPackage> query, string? search, string? status)
+    {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(p =>
+                p.Name.ToLower().Contains(term) ||
+                (p.Description != null && p.Description.ToLower().Contains(term)) ||
+                p.BillingCycle.ToLower().Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (status.Equals("active", StringComparison.OrdinalIgnoreCase))
+                query = query.Where(p => p.IsActive);
+            else if (status.Equals("inactive", StringComparison.OrdinalIgnoreCase))
+                query = query.Where(p => !p.IsActive);
+        }
+
+        return query;
+    }
+
     public async Task<RadiusPackage?> GetByIdAsync(int id)
     {
         _log.LogDebug("Fetching plan by ID {PlanId}", id);
@@ -43,18 +136,44 @@ public class PlanRepository : IPlanRepository
 
     public async Task<RadiusPackage> CreateAsync(RadiusPackage plan)
     {
-        _log.LogInformation("Creating plan {Name} with price {Price}", plan.Name, plan.PriceCents);
+        _log.LogDebug("Creating plan {Name} with price {Price}", plan.Name, plan.PriceCents);
+        
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        // 1. Automatically generate the group name from the plan's speed/name characteristics
+        // Consistent format: e.g. "Plan-MyPlanName-Group" or clean slug
+        var cleanPlanName = plan.Name.Replace(" ", "").Replace("-", "");
+        var generatedGroupName = $"{cleanPlanName}-Group";
+
+        // 2. Insert or fetch matching active RadiusGroup entry into radius_groups
+        var targetGroup = await _db.RadiusGroups
+            .FirstOrDefaultAsync(g => g.GroupName == generatedGroupName);
+
+        if (targetGroup == null)
+        {
+            _log.LogDebug("Auto-creating group {Group} for plan {Plan}", generatedGroupName, plan.Name);
+            targetGroup = new RadiusGroup
+            {
+                GroupName = generatedGroupName,
+                Description = $"Auto-generated group for plan: {plan.Name}",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.RadiusGroups.Add(targetGroup);
+            await _db.SaveChangesAsync();
+        }
+
+        // 3. Link the auto-resolved group ID to our new package plan
+        plan.RadiusGroupId = targetGroup.Id;
+
+        // 4. Save the package plan itself
         _db.RadiusPackages.Add(plan);
         await _db.SaveChangesAsync();
-        _log.LogInformation("Plan created with ID {PlanId}: {Name}", plan.Id, plan.Name);
-        return plan;
-    }
 
-    public async Task UpdateAsync(RadiusPackage plan)
-    {
-        _log.LogDebug("Updating plan {PlanId}: {Name}", plan.Id, plan.Name);
-        await _db.SaveChangesAsync();
-        _log.LogInformation("Plan {PlanId} updated", plan.Id);
+        await tx.CommitAsync();
+
+        _log.LogDebug("Plan created with ID {PlanId}: {Name} linked to RadiusGroup [{GroupId}: {Group}]", plan.Id, plan.Name, plan.RadiusGroupId, generatedGroupName);
+        return plan;
     }
 
     public async Task<bool> NameExistsAsync(string name)
@@ -72,7 +191,7 @@ public class PlanRepository : IPlanRepository
             .FirstOrDefaultAsync();
     }
 
-    public async Task SyncGroupQosAsync(RadiusPackage plan)
+    public async Task SyncGroupPolicyAsync(RadiusPackage plan)
     {
         var groupName = await _db.RadiusGroups
             .Where(g => g.Id == plan.RadiusGroupId)
@@ -81,40 +200,220 @@ public class PlanRepository : IPlanRepository
 
         if (string.IsNullOrEmpty(groupName))
         {
-            _log.LogWarning("Cannot sync QoS: no RADIUS group found for ID {GroupId}", plan.RadiusGroupId);
+            _log.LogWarning("Cannot sync policy: no RADIUS group found for ID {GroupId}", plan.RadiusGroupId);
             return;
         }
 
-        _log.LogInformation("Syncing QoS for group {Group} from plan {Plan}", groupName, plan.Name);
+        _log.LogDebug("Syncing policy for group {Group} from plan {Plan}", groupName, plan.Name);
 
-        // Delete existing replies for this group
-        await _db.Database.ExecuteSqlRawAsync(
-            "DELETE FROM radgroupreply WHERE \"GroupName\" = {0}", groupName);
+        await using var tx = await _db.Database.BeginTransactionAsync();
 
-        // Insert Session-Timeout
-        await _db.Database.ExecuteSqlRawAsync(
-            "INSERT INTO radgroupreply (\"GroupName\", \"Attribute\", \"op\", \"Value\") VALUES ({0}, 'Session-Timeout', ':=', {1})",
-            groupName, plan.SessionTimeoutSeconds.ToString());
+        // 1. Delete existing replies of this group via EF Core (Cleanly tracks & maps database constraints)
+        var existingReplies = await _db.Set<RadGroupReply>()
+            .Where(r => r.GroupName == groupName)
+            .ToListAsync();
+        _db.Set<RadGroupReply>().RemoveRange(existingReplies);
 
-        // Insert Idle-Timeout
-        await _db.Database.ExecuteSqlRawAsync(
-            "INSERT INTO radgroupreply (\"GroupName\", \"Attribute\", \"op\", \"Value\") VALUES ({0}, 'Idle-Timeout', ':=', {1})",
-            groupName, plan.IdleTimeoutSeconds.ToString());
+        // 2. Prepare new reply values
+        var repliesToInsert = new List<RadGroupReply>
+        {
+            new() { GroupName = groupName, Attribute = "Session-Timeout", Op = ":=", Value = plan.SessionTimeoutSeconds.ToString() },
+            new() { GroupName = groupName, Attribute = "Idle-Timeout", Op = ":=", Value = plan.IdleTimeoutSeconds.ToString() }
+        };
 
-        // Insert bandwidth limits
         if (plan.BandwidthDownKbps.HasValue)
         {
-            await _db.Database.ExecuteSqlRawAsync(
-                "INSERT INTO radgroupreply (\"GroupName\", \"Attribute\", \"op\", \"Value\") VALUES ({0}, 'WISPr-Bandwidth-Max-Down', ':=', {1})",
-                groupName, plan.BandwidthDownKbps.Value.ToString());
+            repliesToInsert.Add(new() { GroupName = groupName, Attribute = "WISPr-Bandwidth-Max-Down", Op = ":=", Value = plan.BandwidthDownKbps.Value.ToString() });
         }
         if (plan.BandwidthUpKbps.HasValue)
         {
-            await _db.Database.ExecuteSqlRawAsync(
-                "INSERT INTO radgroupreply (\"GroupName\", \"Attribute\", \"op\", \"Value\") VALUES ({0}, 'WISPr-Bandwidth-Max-Up', ':=', {1})",
-                groupName, plan.BandwidthUpKbps.Value.ToString());
+            repliesToInsert.Add(new() { GroupName = groupName, Attribute = "WISPr-Bandwidth-Max-Up", Op = ":=", Value = plan.BandwidthUpKbps.Value.ToString() });
         }
 
-        _log.LogInformation("QoS sync complete for group {Group}", groupName);
+        await _db.Set<RadGroupReply>().AddRangeAsync(repliesToInsert);
+
+        // 3. Delete existing checks of this group
+        var existingChecks = await _db.Set<RadGroupCheck>()
+            .Where(c => c.GroupName == groupName)
+            .ToListAsync();
+        _db.Set<RadGroupCheck>().RemoveRange(existingChecks);
+
+        // 4. Prepare new check values
+        var checksToInsert = new List<RadGroupCheck>
+        {
+            new() { GroupName = groupName, Attribute = "Simultaneous-Use", Op = ":=", Value = plan.MaxDevices.ToString() }
+        };
+
+        if (!plan.IsActive)
+        {
+            checksToInsert.Add(new() { GroupName = groupName, Attribute = "Auth-Type", Op = ":=", Value = "Reject" });
+        }
+
+        await _db.Set<RadGroupCheck>().AddRangeAsync(checksToInsert);
+
+        // Persist all changes atomically through EF Core
+        await _db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        _log.LogDebug("Policy sync complete for group {Group}", groupName);
+    }
+
+    // In the repository
+    public async Task<RadiusPackage> UpdatePlanWithPolicyAsync(RadiusPackage plan)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        // 1. Fetch the OLD group ID from db before saving changes to detect modifications
+        var oldGroupId = await _db.RadiusPackages
+            .AsNoTracking()
+            .Where(p => p.Id == plan.Id)
+            .Select(p => p.RadiusGroupId)
+            .FirstOrDefaultAsync();
+
+        // 2. Update the plan row itself
+        _db.RadiusPackages.Update(plan);
+        await _db.SaveChangesAsync();
+
+        // 3. Clean up the old group's attributes if the RADIUS group changed
+        if (oldGroupId != 0 && oldGroupId != plan.RadiusGroupId)
+        {
+            var oldGroupName = await _db.RadiusGroups
+                .Where(g => g.Id == oldGroupId)
+                .Select(g => g.GroupName)
+                .FirstOrDefaultAsync();
+
+            if (!string.IsNullOrEmpty(oldGroupName))
+            {
+                _log.LogDebug("RadiusGroupId changed from {OldGroupId} to {NewGroupId}. Cleaning up old group {GroupName} policies.", oldGroupId, plan.RadiusGroupId, oldGroupName);
+
+                var oldReplies = await _db.Set<RadGroupReply>()
+                    .Where(r => r.GroupName == oldGroupName)
+                    .ToListAsync();
+                _db.Set<RadGroupReply>().RemoveRange(oldReplies);
+
+                var oldChecks = await _db.Set<RadGroupCheck>()
+                    .Where(c => c.GroupName == oldGroupName)
+                    .ToListAsync();
+                _db.Set<RadGroupCheck>().RemoveRange(oldChecks);
+                
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        // 4. Resolve new group name
+        var groupName = await _db.RadiusGroups
+            .Where(g => g.Id == plan.RadiusGroupId)
+            .Select(g => g.GroupName)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrEmpty(groupName))
+        {
+            _log.LogWarning("Cannot sync policy: no RADIUS group found for ID {GroupId}", plan.RadiusGroupId);
+            await tx.CommitAsync(); // plan update still stands even if group missing
+            return plan;
+        }
+
+        // 5. radgroupreply (Sync rules to the new group)
+        var existingReplies = await _db.Set<RadGroupReply>()
+            .Where(r => r.GroupName == groupName)
+            .ToListAsync();
+        _db.Set<RadGroupReply>().RemoveRange(existingReplies);
+
+        var repliesToInsert = new List<RadGroupReply>
+        {
+            new() { GroupName = groupName, Attribute = "Session-Timeout", Op = ":=", Value = plan.SessionTimeoutSeconds.ToString() },
+            new() { GroupName = groupName, Attribute = "Idle-Timeout", Op = ":=", Value = plan.IdleTimeoutSeconds.ToString() }
+        };
+
+        if (plan.BandwidthDownKbps.HasValue)
+        {
+            repliesToInsert.Add(new() { GroupName = groupName, Attribute = "WISPr-Bandwidth-Max-Down", Op = ":=", Value = plan.BandwidthDownKbps.Value.ToString() });
+        }
+        if (plan.BandwidthUpKbps.HasValue)
+        {
+            repliesToInsert.Add(new() { GroupName = groupName, Attribute = "WISPr-Bandwidth-Max-Up", Op = ":=", Value = plan.BandwidthUpKbps.Value.ToString() });
+        }
+
+        await _db.Set<RadGroupReply>().AddRangeAsync(repliesToInsert);
+
+        // 6. radgroupcheck
+        var existingChecks = await _db.Set<RadGroupCheck>()
+            .Where(c => c.GroupName == groupName)
+            .ToListAsync();
+        _db.Set<RadGroupCheck>().RemoveRange(existingChecks);
+
+        var checksToInsert = new List<RadGroupCheck>
+        {
+            new() { GroupName = groupName, Attribute = "Simultaneous-Use", Op = ":=", Value = plan.MaxDevices.ToString() }
+        };
+
+        if (!plan.IsActive)
+        {
+            checksToInsert.Add(new() { GroupName = groupName, Attribute = "Auth-Type", Op = ":=", Value = "Reject" });
+        }
+
+        await _db.Set<RadGroupCheck>().AddRangeAsync(checksToInsert);
+
+        await _db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        _log.LogDebug("Plan {PlanId} and policy for group {Group} updated atomically", plan.Id, groupName);
+        return plan;
+    }
+
+    public async Task DeleteAsync(RadiusPackage plan)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        // 1. Delete the plan row
+        _db.RadiusPackages.Remove(plan);
+        await _db.SaveChangesAsync();
+
+        // 2. Resolve the RADIUS group
+        var targetGroup = await _db.RadiusGroups
+            .FirstOrDefaultAsync(g => g.Id == plan.RadiusGroupId);
+
+        if (targetGroup != null)
+        {
+            var groupName = targetGroup.GroupName;
+            _log.LogDebug("Plan deletion: syncing RADIUS policy removal and deleting group {Group}", groupName);
+
+            // 3. Delete group replies using strongly-typed entities
+            var replies = await _db.Set<RadGroupReply>()
+                .Where(r => r.GroupName == groupName)
+                .ToListAsync();
+            _db.Set<RadGroupReply>().RemoveRange(replies);
+
+            // 4. Delete group checks using strongly-typed entities
+            var checks = await _db.Set<RadGroupCheck>()
+                .Where(c => c.GroupName == groupName)
+                .ToListAsync();
+            _db.Set<RadGroupCheck>().RemoveRange(checks);
+
+            // 5. Delete the radius group itself
+            _db.RadiusGroups.Remove(targetGroup);
+
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            _log.LogWarning("Plan deletion: no RADIUS group found for ID {GroupId} to clean up", plan.RadiusGroupId);
+        }
+
+        await tx.CommitAsync();
+        _log.LogDebug("Plan {PlanId} and its associated RADIUS group and policies deleted atomically", plan.Id);
+    }
+
+    public async Task<int> GetActiveSubscribersCountAsync(int planId)
+    {
+        _log.LogDebug("Fetching active subscriber count for plan ID {PlanId}", planId);
+        
+        // Count active subscriptions tied to this Plan package ID
+        var count = await _db.Subscriptions
+            .Where(s => s.PackageId == planId && s.Status == "active")
+            .CountAsync();
+            
+        _log.LogDebug("Found {Count} active subscribers for plan ID {PlanId}", count, planId);
+        return count;
     }
 }

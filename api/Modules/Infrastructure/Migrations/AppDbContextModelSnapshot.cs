@@ -22,6 +22,68 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("InternetProvider.Api.Modules.Audit.Core.Models.AuditLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("ActorType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("actor_type");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<string>("Changes")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("changes");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("EntityId")
+                        .HasColumnType("integer")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("HttpMethod")
+                        .HasColumnType("text")
+                        .HasColumnName("http_method");
+
+                    b.Property<string>("HttpPath")
+                        .HasColumnType("text")
+                        .HasColumnName("http_path");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text")
+                        .HasColumnName("ip_address");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("summary");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("audit_logs");
+                });
+
             modelBuilder.Entity("InternetProvider.Api.Modules.Customers.Core.Models.Customer", b =>
                 {
                     b.Property<int>("Id")
@@ -38,10 +100,6 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<string>("City")
                         .HasColumnType("text")
                         .HasColumnName("city");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
 
                     b.Property<string>("CustomerCode")
                         .IsRequired()
@@ -65,10 +123,10 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("notes");
 
-                    b.Property<string>("Phone")
+                    b.Property<string>("PasswordPpoe")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("phone");
+                        .HasColumnName("password_ppoe");
 
                     b.Property<string>("Region")
                         .HasColumnType("text")
@@ -90,6 +148,11 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("integer")
                         .HasColumnName("user_id");
+
+                    b.Property<string>("UsernamePpoe")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("username_ppoe");
 
                     b.HasKey("Id");
 
@@ -232,6 +295,63 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("organization");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Payments.Core.Models.Payment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AmountCents")
+                        .HasColumnType("integer")
+                        .HasColumnName("amount_cents");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payment_method");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("phone_number");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("reference_number");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<int>("SubscriptionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("subscription_id");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("payments");
                 });
 
             modelBuilder.Entity("InternetProvider.Api.Modules.Plans.Core.Models.RadiusGroup", b =>
@@ -806,6 +926,63 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.ToTable("settings");
                 });
 
+            modelBuilder.Entity("InternetProvider.Api.Modules.Staff.Core.Models.Staff", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("DateJoined")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_joined");
+
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("employment_type");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<long>("SalaryCents")
+                        .HasColumnType("bigint")
+                        .HasColumnName("salary_cents");
+
+                    b.Property<string>("StaffCode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("staff_code");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffCode")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("staff");
+                });
+
             modelBuilder.Entity("InternetProvider.Api.Modules.Subscriptions.Core.Models.Subscription", b =>
                 {
                     b.Property<int>("Id")
@@ -822,6 +999,10 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by");
 
                     b.Property<DateTime>("CurrentPeriodEnd")
                         .HasColumnType("timestamp with time zone")
@@ -853,6 +1034,10 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated_by");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasColumnType("text")
@@ -870,6 +1055,41 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("subscriptions");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Subscriptions.Core.Models.SubscriptionAudit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Change")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("change");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<int?>("ChangedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("changed_by");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<int>("SubscriptionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("subscription_id");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("subscription_audits");
                 });
 
             modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.User", b =>
@@ -925,9 +1145,34 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
+                    b.HasIndex("Phone")
+                        .IsUnique();
+
                     b.HasIndex("RoleId");
 
                     b.ToTable("users");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Customers.Core.Models.Customer", b =>
+                {
+                    b.HasOne("InternetProvider.Api.Modules.Users.Core.Models.User", "User")
+                        .WithOne("Customer")
+                        .HasForeignKey("InternetProvider.Api.Modules.Customers.Core.Models.Customer", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Staff.Core.Models.Staff", b =>
+                {
+                    b.HasOne("InternetProvider.Api.Modules.Users.Core.Models.User", "User")
+                        .WithOne("Staff")
+                        .HasForeignKey("InternetProvider.Api.Modules.Staff.Core.Models.Staff", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.User", b =>
@@ -939,6 +1184,13 @@ namespace InternetProvider.Api.Modules.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("InternetProvider.Api.Modules.Users.Core.Models.User", b =>
+                {
+                    b.Navigation("Customer");
+
+                    b.Navigation("Staff");
                 });
 #pragma warning restore 612, 618
         }

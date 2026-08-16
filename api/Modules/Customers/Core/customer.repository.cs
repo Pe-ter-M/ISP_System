@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using InternetProvider.Api.Modules.Customers.Interfaces;
+using InternetProvider.Api.Common;
+using InternetProvider.Api.Modules.Customers.Core.Models;
 using InternetProvider.Api.Modules.Customers.Dtos;
+using InternetProvider.Api.Modules.Customers.Interfaces;
 using InternetProvider.Api.Modules.Infrastructure.Core;
 
 namespace InternetProvider.Api.Modules.Customers.Core;
@@ -16,45 +18,48 @@ public class CustomerRepository : ICustomerRepository
         _log = log;
     }
 
-    public async Task<PaginatedResponse<CustomerWithUser>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc)
+    public async Task<PaginatedResponse<Customer>> GetAllAsync(int page, int pageSize, string? search, string? sortBy, bool sortDesc, string? subscription = null)
     {
-        var query = from c in _db.Customers
-                    join u in _db.Users on c.UserId equals u.Id
-                    select new CustomerWithUser
-                    {
-                        Customer = c,
-                        FullName = u.FullName,
-                        Email = u.Email,
-                    };
+        var query = _db.Customers.Include(c => c.User).AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
-            query = query.Where(x =>
-                x.FullName.ToLower().Contains(term) ||
-                x.Customer.CustomerCode.ToLower().Contains(term) ||
-                (x.Email != null && x.Email.ToLower().Contains(term)) ||
-                x.Customer.Phone.Contains(term) ||
-                (x.Customer.City != null && x.Customer.City.ToLower().Contains(term)));
+            query = query.Where(c =>
+                c.User!.FullName.ToLower().Contains(term) ||
+                c.CustomerCode.ToLower().Contains(term) ||
+                c.User!.Email.ToLower().Contains(term) ||
+                (c.User!.Phone != null && c.User!.Phone.Contains(term)) ||
+                (c.City != null && c.City.ToLower().Contains(term)));
+        }
+
+        // ── Subscription filter (all | none | active) ──
+        if (!string.IsNullOrWhiteSpace(subscription))
+        {
+            var sub = subscription.ToLower();
+            if (sub == "none")
+                query = query.Where(c => !_db.Subscriptions.Any(s => s.CustomerId == c.Id && s.Status == "active"));
+            else if (sub == "active")
+                query = query.Where(c => _db.Subscriptions.Any(s => s.CustomerId == c.Id && s.Status == "active"));
         }
 
         query = (sortBy?.ToLower()) switch
         {
-            "name" => sortDesc ? query.OrderByDescending(x => x.FullName) : query.OrderBy(x => x.FullName),
-            "code" => sortDesc ? query.OrderByDescending(x => x.Customer.CustomerCode) : query.OrderBy(x => x.Customer.CustomerCode),
-            "email" => sortDesc ? query.OrderByDescending(x => x.Email) : query.OrderBy(x => x.Email),
-            "city" => sortDesc ? query.OrderByDescending(x => x.Customer.City!) : query.OrderBy(x => x.Customer.City!),
-            "region" => sortDesc ? query.OrderByDescending(x => x.Customer.Region!) : query.OrderBy(x => x.Customer.Region!),
-            "status" => sortDesc ? query.OrderByDescending(x => x.Customer.Status) : query.OrderBy(x => x.Customer.Status),
-            "created" => sortDesc ? query.OrderByDescending(x => x.Customer.CreatedAt) : query.OrderBy(x => x.Customer.CreatedAt),
-            _ => query.OrderBy(x => x.Customer.Id)
+            "name" => sortDesc ? query.OrderByDescending(c => c.User!.FullName) : query.OrderBy(c => c.User!.FullName),
+            "code" => sortDesc ? query.OrderByDescending(c => c.CustomerCode) : query.OrderBy(c => c.CustomerCode),
+            "email" => sortDesc ? query.OrderByDescending(c => c.User!.Email) : query.OrderBy(c => c.User!.Email),
+            "city" => sortDesc ? query.OrderByDescending(c => c.City!) : query.OrderBy(c => c.City!),
+            "region" => sortDesc ? query.OrderByDescending(c => c.Region!) : query.OrderBy(c => c.Region!),
+            "status" => sortDesc ? query.OrderByDescending(c => c.Status) : query.OrderBy(c => c.Status),
+            "created" => sortDesc ? query.OrderByDescending(c => c.User!.CreatedAt) : query.OrderBy(c => c.User!.CreatedAt),
+            _ => query.OrderBy(c => c.Id)
         };
 
         var totalCount = await query.CountAsync();
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
         _log.LogDebug("Fetched {Count}/{Total} customers", items.Count, totalCount);
-        return new PaginatedResponse<CustomerWithUser>
+        return new PaginatedResponse<Customer>
         {
             Items = items,
             TotalCount = totalCount,
@@ -63,23 +68,17 @@ public class CustomerRepository : ICustomerRepository
         };
     }
 
-    public async Task<CustomerWithUser?> GetByIdAsync(int id)
+    public async Task<Customer?> GetByIdAsync(int id)
     {
         _log.LogDebug("Fetching customer by ID {CustomerId}", id);
-        var result = await (from c in _db.Customers
-                            join u in _db.Users on c.UserId equals u.Id
-                            where c.Id == id
-                            select new CustomerWithUser
-                            {
-                                Customer = c,
-                                FullName = u.FullName,
-                                Email = u.Email,
-                            }).FirstOrDefaultAsync();
+        var customer = await _db.Customers
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.Id == id);
 
-        if (result == null)
+        if (customer == null)
             _log.LogWarning("Customer with ID {CustomerId} not found", id);
 
-        return result;
+        return customer;
     }
 
     public async Task<List<CustomerSubscriptionDto>> GetSubscriptionsAsync(int customerId)
@@ -90,6 +89,7 @@ public class CustomerRepository : ICustomerRepository
                 (s, p) => new CustomerSubscriptionDto
                 {
                     Id = s.Id,
+                    PackageId = s.PackageId,
                     Username = s.Username,
                     PlanName = p.Name,
                     Status = s.Status,
@@ -122,8 +122,17 @@ public class CustomerRepository : ICustomerRepository
         return customer;
     }
 
+    public async Task<Models.Customer> UpdateAsync(Models.Customer customer)
+    {
+        _log.LogDebug("Updating customer {CustomerId}", customer.Id);
+        _db.Customers.Update(customer);
+        await _db.SaveChangesAsync();
+        _log.LogDebug("Customer {CustomerId} updated", customer.Id);
+        return customer;
+    }
+
     public async Task<bool> IsPhoneTakenAsync(string phone)
     {
-        return await _db.Customers.AnyAsync(c => c.Phone == phone);
+        return await _db.Users.AnyAsync(u => u.Phone == phone);
     }
 }

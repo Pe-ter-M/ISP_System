@@ -16,6 +16,13 @@ public class SettingService : ISettingService
         _log = log;
     }
 
+    public async Task<List<SettingResponse>> GetAllAsync()
+    {
+        _log.LogDebug("Getting all settings");
+        var settings = await _repo.GetAllAsync();
+        return settings.Select(MapToResponse).ToList();
+    }
+
     public async Task<SettingResponse?> GetByKeyAsync(string key)
     {
         _log.LogDebug("Getting setting {Key}", key);
@@ -65,6 +72,7 @@ public class SettingService : ISettingService
             Key = setting.Key,
             Value = setting.Value,
             Description = setting.Description,
+            IsEncrypted = setting.IsEncrypted,
             UpdatedAt = setting.UpdatedAt
         };
     }

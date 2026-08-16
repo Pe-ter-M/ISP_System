@@ -14,10 +14,14 @@ public class AppDbContext : DbContext
     public DbSet<Roles.Core.Models.RolePermission> RolePermissions => Set<Roles.Core.Models.RolePermission>();
     public DbSet<Roles.Core.Models.UserPermission> UserPermissions => Set<Roles.Core.Models.UserPermission>();
     public DbSet<Customers.Core.Models.Customer> Customers => Set<Customers.Core.Models.Customer>();
+    public DbSet<Staff.Core.Models.Staff> Staff => Set<Staff.Core.Models.Staff>();
     public DbSet<Plans.Core.Models.RadiusGroup> RadiusGroups => Set<Plans.Core.Models.RadiusGroup>();
     public DbSet<Plans.Core.Models.RadiusPackage> RadiusPackages => Set<Plans.Core.Models.RadiusPackage>();
     public DbSet<Subscriptions.Core.Models.Subscription> Subscriptions => Set<Subscriptions.Core.Models.Subscription>();
+    public DbSet<Subscriptions.Core.Models.SubscriptionAudit> SubscriptionAudits => Set<Subscriptions.Core.Models.SubscriptionAudit>();
     public DbSet<Settings.Core.Models.Setting> Settings => Set<Settings.Core.Models.Setting>();
+    public DbSet<Payments.Core.Models.Payment> Payments => Set<Payments.Core.Models.Payment>();
+    public DbSet<Audit.Core.Models.AuditLog> AuditLogs => Set<Audit.Core.Models.AuditLog>();
 
     // FreeRADIUS tables
     public DbSet<Radius.Core.Models.RadCheck> RadChecks => Set<Radius.Core.Models.RadCheck>();
@@ -41,6 +45,9 @@ public class AppDbContext : DbContext
         // ── Users ──
         modelBuilder.Entity<Users.Core.Models.User>()
             .HasIndex(u => u.Email)
+            .IsUnique();
+        modelBuilder.Entity<Users.Core.Models.User>()
+            .HasIndex(u => u.Phone)
             .IsUnique();
         modelBuilder.Entity<Users.Core.Models.User>()
             .HasIndex(u => u.RoleId);
@@ -67,6 +74,11 @@ public class AppDbContext : DbContext
 
         // ── Customers ──
         modelBuilder.Entity<Customers.Core.Models.Customer>()
+            .HasOne(c => c.User)
+            .WithOne(u => u.Customer)
+            .HasForeignKey<Customers.Core.Models.Customer>(c => c.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Customers.Core.Models.Customer>()
             .HasIndex(c => c.CustomerCode)
             .IsUnique();
         modelBuilder.Entity<Customers.Core.Models.Customer>()
@@ -74,6 +86,21 @@ public class AppDbContext : DbContext
             .IsUnique();
         modelBuilder.Entity<Customers.Core.Models.Customer>()
             .HasIndex(c => c.Status);
+
+        // ── Staff ──
+        modelBuilder.Entity<Staff.Core.Models.Staff>()
+            .HasOne(s => s.User)
+            .WithOne(u => u.Staff)
+            .HasForeignKey<Staff.Core.Models.Staff>(s => s.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Staff.Core.Models.Staff>()
+            .HasIndex(s => s.StaffCode)
+            .IsUnique();
+        modelBuilder.Entity<Staff.Core.Models.Staff>()
+            .HasIndex(s => s.UserId)
+            .IsUnique();
+        modelBuilder.Entity<Staff.Core.Models.Staff>()
+            .HasIndex(s => s.Status);
 
         // ── Radius Groups ──
         modelBuilder.Entity<Plans.Core.Models.RadiusGroup>()

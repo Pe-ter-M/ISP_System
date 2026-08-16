@@ -14,6 +14,12 @@ public static class Permissions
     public const string CustomersUpdate = "customer.update";
     public const string CustomersDelete = "customer.delete";
 
+    // ── Staff ──
+    public const string StaffView = "staff.view";
+    public const string StaffCreate = "staff.create";
+    public const string StaffUpdate = "staff.update";
+    public const string StaffDelete = "staff.delete";
+
     // ── Subscriptions ──
     public const string SubscriptionsView = "subscription.view";
     public const string SubscriptionsCreate = "subscription.create";
@@ -78,6 +84,10 @@ public static class Permissions
         { CustomersCreate, "Create customers" },
         { CustomersUpdate, "Edit customers" },
         { CustomersDelete, "Delete customers" },
+        { StaffView, "View staff members" },
+        { StaffCreate, "Create staff members" },
+        { StaffUpdate, "Edit staff members" },
+        { StaffDelete, "Delete staff members" },
         { SubscriptionsView, "View subscriptions" },
         { SubscriptionsCreate, "Create subscriptions" },
         { SubscriptionsUpdate, "Edit subscriptions" },
@@ -107,4 +117,33 @@ public static class Permissions
         { AuditView, "View audit log" },
         { ReportsView, "View reports" },
     };
+
+    /// <summary>
+    /// Enforce the view-first rule: any non-view permission (e.g. "customer.update")
+    /// requires its resource's "view" permission (e.g. "customer.view") to be present,
+    /// but only when a "view" permission actually exists for that resource (e.g.
+    /// "technician" / "role" / "installation" have no view permission and are standalone).
+    /// A "view" permission may be granted alone, but not the other way around.
+    /// Returns an error message describing the first violation, or null if valid.
+    /// </summary>
+    public static string? ValidateViewDependency(IEnumerable<string> codes)
+    {
+        var set = codes.ToHashSet();
+        foreach (var code in set)
+        {
+            var dot = code.IndexOf('.');
+            if (dot <= 0) continue;
+            var resource = code[..dot];
+            var action = code[(dot + 1)..];
+            if (action.Equals("view", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var viewCode = $"{resource}.view";
+            // Only enforce when a real "view" permission exists for this resource.
+            if (!All.ContainsKey(viewCode)) continue;
+            if (set.Contains(viewCode)) continue;
+
+            return $"Cannot assign '{code}' without '{viewCode}'. The '{resource}' view permission must be granted first.";
+        }
+        return null;
+    }
 }

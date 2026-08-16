@@ -39,4 +39,12 @@ public class Subscription
 
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>User.Id of the person (staff) or customer who created this subscription.</summary>
+    [Column("created_by")]
+    public int? CreatedBy { get; set; }
+
+    /// <summary>User.Id of the staff who last updated this subscription.</summary>
+    [Column("updated_by")]
+    public int? UpdatedBy { get; set; }
 }

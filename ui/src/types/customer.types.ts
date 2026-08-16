@@ -10,11 +10,13 @@ export interface CustomerSummary {
   city: string | null
   region: string | null
   status: string
+  hasActiveSubscription?: boolean
   createdAt: string
 }
 
 export interface CustomerSubscription {
   id: number
+  packageId: number
   username: string
   planName: string
   status: string
@@ -35,7 +37,10 @@ export interface CustomerDetail {
   region: string | null
   gpsLat: number | null
   gpsLng: number | null
+  usernamePpoe: string
+  passwordPpoe: string
   status: string
+  hasActiveSubscription?: boolean
   notes: string | null
   createdAt: string
   updatedAt: string

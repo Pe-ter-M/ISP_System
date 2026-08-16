@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useOrganizationStore } from '@/stores/organization.store'
+import { useCompanyInfo } from '@/composables/useCompanyInfo'
 
 const org = useOrganizationStore()
+const { companyName } = useCompanyInfo()
 </script>
 
 <template>
@@ -9,7 +11,7 @@ const org = useOrganizationStore()
     <!-- ── Page Header ── -->
     <section class="text-center py-12 sm:py-16 animate-fade-in">
       <h1 class="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-        About {{ org.name || 'PhantomNet' }}
+        About {{ companyName }}
       </h1>
       <!-- TODO: Replace with actual mission text -->
       <p class="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">

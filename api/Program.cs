@@ -16,6 +16,17 @@ using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Core;
 using InternetProvider.Api.Modules.Customers.Interfaces;
 using InternetProvider.Api.Modules.Customers.Core;
+using InternetProvider.Api.Modules.Staff.Interfaces;
+using InternetProvider.Api.Modules.Staff.Core;
+using InternetProvider.Api.Modules.Nas.Interfaces;
+using InternetProvider.Api.Modules.Nas.Core;
+using InternetProvider.Api.Modules.Subscriptions.Interfaces;
+using InternetProvider.Api.Modules.Subscriptions.Core;
+using InternetProvider.Api.Modules.Payments.Interfaces;
+using InternetProvider.Api.Modules.Payments.Core.Gateways;
+using InternetProvider.Api.Modules.Payments.Services;
+using InternetProvider.Api.Modules.Audit.Interfaces;
+using InternetProvider.Api.Modules.Audit.Core;
 using InternetProvider.Api.Services;
 
 // ── Serilog bootstrap (catches startup errors before config loads) ──
@@ -66,6 +77,29 @@ try
     builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
     builder.Services.AddScoped<ICustomerService, CustomerService>();
 
+    // ── Staff services ───────────────────────────────────────────────
+    builder.Services.AddScoped<IStaffRepository, StaffRepository>();
+    builder.Services.AddScoped<IStaffService, StaffService>();
+
+    // ── NAS services ─────────────────────────────────────────────────
+    builder.Services.AddScoped<INasRepository, NasRepository>();
+    builder.Services.AddScoped<INasService, NasService>();
+
+    // ── Subscription services ─────────────────────────────────────────
+    builder.Services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+    builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+
+    // ── Audit services ────────────────────────────────────────────────
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+    builder.Services.AddScoped<IAuditService, AuditService>();
+
+    // ── Payment Infrastructure services ──────────────────────────────
+    builder.Services.AddScoped<IPaymentGateway, MockPaymentGateway>();
+    builder.Services.AddScoped<IPaymentGateway, MpesaMockPaymentGateway>();
+    builder.Services.AddScoped<IPaymentGateway, AirtelMoneyMockPaymentGateway>();
+    builder.Services.AddScoped<PaymentGatewayResolver>();
+
     builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, context, cancellationToken) =>
@@ -93,8 +127,7 @@ try
         app.MapScalarApiReference(options =>
         {
             options.WithTitle("Internet Provider API")
-                   .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
-                   .WithPreferredScheme("Bearer");
+                   .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
         });
     }
 

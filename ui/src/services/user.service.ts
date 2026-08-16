@@ -1,5 +1,5 @@
 import api from './api'
-import type { PaginatedUsers, UserDetail } from '@/types/user.types'
+import type { PaginatedUsers, UserDetail, Permission } from '@/types/user.types'
 
 export interface CreateUserPayload {
   email: string
@@ -32,5 +32,18 @@ export async function getUserById(id: number): Promise<UserDetail> {
 
 export async function createUser(payload: CreateUserPayload): Promise<UserDetail> {
   const res = await api.post('/users', payload)
+  return res.data as UserDetail
+}
+
+export async function getPermissions(): Promise<Permission[]> {
+  const res = await api.get('/permissions')
+  return res.data as Permission[]
+}
+
+export async function updateUserPermissions(
+  id: number,
+  overrides: { code: string; isGranted: boolean }[],
+): Promise<UserDetail> {
+  const res = await api.put(`/users/${id}/permissions`, { overrides })
   return res.data as UserDetail
 }

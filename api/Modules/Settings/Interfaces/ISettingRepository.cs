@@ -4,6 +4,7 @@ namespace InternetProvider.Api.Modules.Settings.Interfaces;
 
 public interface ISettingRepository
 {
+    Task<List<Setting>> GetAllAsync();
     Task<Setting?> GetByKeyAsync(string key);
     Task<Setting> CreateAsync(Setting setting);
     Task<Setting?> UpdateAsync(string key, string value, string? description, int? updatedBy);

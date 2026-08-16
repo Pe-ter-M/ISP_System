@@ -3,9 +3,11 @@ import { RouterLink, RouterView } from 'vue-router'
 import { ref, onMounted } from 'vue'
 import { useThemeStore } from '@/stores/theme.store'
 import { useOrganizationStore } from '@/stores/organization.store'
+import { useCompanyInfo } from '@/composables/useCompanyInfo'
 
 const theme = useThemeStore()
 const org = useOrganizationStore()
+const { companyName, companyShortName, initial } = useCompanyInfo()
 const mobileMenuOpen = ref(false)
 
 onMounted(() => { org.load() })
@@ -21,10 +23,10 @@ function closeMobileMenu() { mobileMenuOpen.value = false }
         <div class="flex items-center justify-between h-16">
           <RouterLink to="/" class="flex items-center gap-3 no-underline group" @click="closeMobileMenu">
             <div class="w-8 h-8 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm transition-transform duration-300 group-hover:scale-110">
-              {{ org.shortName?.charAt(0) || org.name.charAt(0) || 'P' }}
+              {{ initial }}
             </div>
             <span class="text-lg font-bold text-gray-800 dark:text-gray-100">
-              {{ org.shortName || org.name || 'PhantomNet' }}
+              {{ companyName }}
             </span>
           </RouterLink>
 
@@ -81,7 +83,7 @@ function closeMobileMenu() { mobileMenuOpen.value = false }
     <footer class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 transition-colors duration-300 mt-16">
       <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
-          <p>&copy; {{ new Date().getFullYear() }} {{ org.name || 'PhantomNet' }}. All rights reserved.</p>
+          <p>&copy; {{ new Date().getFullYear() }} {{ companyName }}. All rights reserved.</p>
           <div class="flex items-center gap-6">
             <RouterLink to="/plans" class="hover:text-blue-600 dark:hover:text-blue-400 transition">Plans</RouterLink>
             <RouterLink to="/about" class="hover:text-blue-600 dark:hover:text-blue-400 transition">About</RouterLink>

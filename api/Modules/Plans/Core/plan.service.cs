@@ -1,6 +1,9 @@
+using InternetProvider.Api.Common;
 using InternetProvider.Api.Modules.Plans.Dtos;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Core.Models;
+using InternetProvider.Api.Modules.Audit.Interfaces;
+using InternetProvider.Api.Modules.Audit.Dtos;
 using InternetProvider.Api.Services;
 
 namespace InternetProvider.Api.Modules.Plans.Core;
@@ -9,35 +12,135 @@ public class PlanService : IPlanService
 {
     private readonly IPlanRepository _repo;
     private readonly ILogger<PlanService> _log;
+    private readonly IAuditService _audit;
 
-    public PlanService(IPlanRepository repo, ILogger<PlanService> log)
+    public PlanService(IPlanRepository repo, ILogger<PlanService> log, IAuditService audit)
     {
         _repo = repo;
         _log = log;
+        _audit = audit;
     }
 
-    public async Task<List<PlanSummaryResponse>> GetAllAsync()
+    public async Task<List<PlanSummaryResponse>> GetAllAsync(bool includeSubscribersCount = false)
     {
-        _log.LogDebug("Processing get all plans request");
+        _log.LogDebug("Processing get all plans request (includeSubscribersCount: {IncludeCount})", includeSubscribersCount);
         var plans = await _repo.GetAllActiveAsync();
-        var responses = plans.Select(p => new PlanSummaryResponse
+        
+        var responses = new List<PlanSummaryResponse>();
+        foreach (var p in plans)
         {
-            Id = p.Id,
-            Name = p.Name,
-            Description = p.Description,
-            PriceCents = p.PriceCents,
-            BillingCycle = p.BillingCycle,
-            BandwidthUpKbps = p.BandwidthUpKbps,
-            BandwidthDownKbps = p.BandwidthDownKbps,
-            MaxDevices = p.MaxDevices,
-        }).ToList();
+            int? count = null;
+            if (includeSubscribersCount)
+            {
+                count = await _repo.GetActiveSubscribersCountAsync(p.Id);
+            }
+
+            responses.Add(new PlanSummaryResponse
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                PriceCents = p.PriceCents,
+                BillingCycle = p.BillingCycle,
+                BandwidthUpKbps = p.BandwidthUpKbps,
+                BandwidthDownKbps = p.BandwidthDownKbps,
+                MaxDevices = p.MaxDevices,
+                ActiveSubscribersCount = count
+            });
+        }
+        
         _log.LogDebug("Returning {Count} plan summaries", responses.Count);
         return responses;
     }
 
-    public async Task<PlanDetailResponse> GetDetailByIdAsync(int id)
+    public async Task<PaginatedResponse<PlanSummaryResponse>> GetAllAdminPagedAsync(
+        int page = 1, int pageSize = 10, string? search = null, string? status = null,
+        string? sortBy = null, bool sortDesc = false, bool includeSubscribersCount = true)
     {
-        _log.LogDebug("Processing get plan detail for ID {PlanId}", id);
+        _log.LogDebug("Processing paged admin plans request (page {Page}, size {PageSize}, search '{Search}', status '{Status}', sort {SortBy})",
+            page, pageSize, search, status, sortBy);
+
+        List<RadiusPackage> pageItems;
+        int totalCount;
+        Dictionary<int, int>? countsByPlan = null;
+
+        var sortBySubscribers = !string.IsNullOrWhiteSpace(sortBy) &&
+                                sortBy.Equals("subscribers", StringComparison.OrdinalIgnoreCase);
+
+        if (sortBySubscribers)
+        {
+            // Subscriber count isn't a DB column — resolve counts + order in memory over the filtered set
+            var all = await _repo.GetFilteredAsync(search, status);
+            totalCount = all.Count;
+
+            countsByPlan = new Dictionary<int, int>(all.Count);
+            foreach (var p in all)
+            {
+                countsByPlan[p.Id] = await _repo.GetActiveSubscribersCountAsync(p.Id);
+            }
+
+            var ordered = sortDesc
+                ? all.OrderByDescending(p => countsByPlan[p.Id]).ThenBy(p => p.SortOrder).ThenBy(p => p.Id)
+                : all.OrderBy(p => countsByPlan[p.Id]).ThenBy(p => p.SortOrder).ThenBy(p => p.Id);
+
+            pageItems = ordered
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+        }
+        else
+        {
+            var result = await _repo.GetAllPagedAsync(page, pageSize, search, status, sortBy, sortDesc);
+            pageItems = result.Items;
+            totalCount = result.TotalCount;
+        }
+
+        var responses = new List<PlanSummaryResponse>(pageItems.Count);
+        foreach (var p in pageItems)
+        {
+            int? count = null;
+            if (includeSubscribersCount)
+            {
+                count = countsByPlan != null && countsByPlan.TryGetValue(p.Id, out var c)
+                    ? c
+                    : await _repo.GetActiveSubscribersCountAsync(p.Id);
+            }
+
+            responses.Add(new PlanSummaryResponse
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                PriceCents = p.PriceCents,
+                BillingCycle = p.BillingCycle,
+                BandwidthUpKbps = p.BandwidthUpKbps,
+                BandwidthDownKbps = p.BandwidthDownKbps,
+                MaxDevices = p.MaxDevices,
+                IsActive = p.IsActive,
+                SortOrder = p.SortOrder,
+                ActiveSubscribersCount = count
+            });
+        }
+
+        _log.LogDebug("Returning {Count}/{Total} plan summaries", responses.Count, totalCount);
+        return new PaginatedResponse<PlanSummaryResponse>
+        {
+            Items = responses,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<PlanStatsResponse> GetPlanStatsAsync()
+    {
+        _log.LogDebug("Processing plan stats request");
+        return await _repo.GetStatsAsync();
+    }
+
+    public async Task<PlanDetailResponse> GetDetailByIdAsync(int id, bool includeSubscribersCount = false)
+    {
+        _log.LogDebug("Processing get plan detail for ID {PlanId} (includeSubscribersCount: {IncludeCount})", id, includeSubscribersCount);
         var plan = await _repo.GetByIdAsync(id);
 
         if (plan == null)
@@ -47,8 +150,13 @@ public class PlanService : IPlanService
         }
 
         var groupName = await _repo.GetGroupNameAsync(plan.RadiusGroupId) ?? "";
+        
+        int? count = null;
+        if (includeSubscribersCount)
+        {
+            count = await _repo.GetActiveSubscribersCountAsync(plan.Id);
+        }
 
-        _log.LogInformation("Returning plan detail for {PlanId}: {Name}", id, plan.Name);
         return new PlanDetailResponse
         {
             Id = plan.Id,
@@ -64,12 +172,32 @@ public class PlanService : IPlanService
             IsActive = plan.IsActive,
             SortOrder = plan.SortOrder,
             GroupName = groupName,
+            ActiveSubscribersCount = count
         };
     }
 
     public async Task<PlanSummaryResponse> CreateAsync(CreatePlanRequest request)
     {
-        _log.LogInformation("Processing create plan request: {Name}", request.Name);
+        _log.LogDebug("Processing create plan request: {Name}", request.Name);
+
+        // Server-side validation
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ConflictException("Plan name is required");
+        if (request.PriceCents < 0)
+            throw new ConflictException("Plan price cannot be negative");
+        
+        var maxDevices = request.MaxDevices ?? 1;
+        if (maxDevices <= 0)
+            throw new ConflictException("Max devices must be 1 or greater");
+
+        if (request.SessionTimeoutSeconds is < 0)
+            throw new ConflictException("Session timeout cannot be negative");
+        if (request.IdleTimeoutSeconds is < 0)
+            throw new ConflictException("Idle timeout cannot be negative");
+        if (request.BandwidthUpKbps is < 0)
+            throw new ConflictException("Upload bandwidth cannot be negative");
+        if (request.BandwidthDownKbps is < 0)
+            throw new ConflictException("Download bandwidth cannot be negative");
 
         if (await _repo.NameExistsAsync(request.Name))
         {
@@ -81,14 +209,13 @@ public class PlanService : IPlanService
         {
             Name = request.Name,
             Description = request.Description,
-            RadiusGroupId = request.RadiusGroupId,
             PriceCents = request.PriceCents,
             BillingCycle = request.BillingCycle ?? "monthly",
             BandwidthUpKbps = request.BandwidthUpKbps,
             BandwidthDownKbps = request.BandwidthDownKbps,
             SessionTimeoutSeconds = request.SessionTimeoutSeconds ?? 86400,
             IdleTimeoutSeconds = request.IdleTimeoutSeconds ?? 600,
-            MaxDevices = request.MaxDevices ?? 1,
+            MaxDevices = maxDevices,
             IsActive = true,
             SortOrder = request.SortOrder ?? 0,
             CreatedAt = DateTime.UtcNow,
@@ -99,7 +226,6 @@ public class PlanService : IPlanService
         // Sync QoS to radgroupreply
         await SyncQos(created);
 
-        _log.LogInformation("Plan created successfully: {PlanId} — {Name}", created.Id, created.Name);
         return new PlanSummaryResponse
         {
             Id = created.Id,
@@ -110,12 +236,14 @@ public class PlanService : IPlanService
             BandwidthUpKbps = created.BandwidthUpKbps,
             BandwidthDownKbps = created.BandwidthDownKbps,
             MaxDevices = created.MaxDevices,
+            IsActive = created.IsActive,
+            SortOrder = created.SortOrder,
         };
     }
 
     public async Task<PlanSummaryResponse> UpdateAsync(int id, UpdatePlanRequest request)
     {
-        _log.LogInformation("Processing update plan request for ID {PlanId}", id);
+        _log.LogDebug("Processing update plan request for ID {PlanId}", id);
 
         var plan = await _repo.GetByIdAsync(id);
         if (plan == null)
@@ -124,6 +252,23 @@ public class PlanService : IPlanService
             throw new NotFoundException($"Plan with ID {id} not found");
         }
 
+        // Server-side validation
+        if (request.Name != null && string.IsNullOrWhiteSpace(request.Name))
+            throw new ConflictException("Plan name cannot be empty");
+        if (request.PriceCents.HasValue && request.PriceCents.Value < 0)
+            throw new ConflictException("Plan price cannot be negative");
+        if (request.MaxDevices.HasValue && request.MaxDevices.Value <= 0)
+            throw new ConflictException("Max devices must be 1 or greater");
+
+        if (request.SessionTimeoutSeconds.HasValue && request.SessionTimeoutSeconds.Value < 0)
+            throw new ConflictException("Session timeout cannot be negative");
+        if (request.IdleTimeoutSeconds.HasValue && request.IdleTimeoutSeconds.Value < 0)
+            throw new ConflictException("Idle timeout cannot be negative");
+        if (request.BandwidthUpKbps.HasValue && request.BandwidthUpKbps.Value < 0)
+            throw new ConflictException("Upload bandwidth cannot be negative");
+        if (request.BandwidthDownKbps.HasValue && request.BandwidthDownKbps.Value < 0)
+            throw new ConflictException("Download bandwidth cannot be negative");
+
         if (request.Name != null && request.Name != plan.Name &&
             await _repo.NameExistsAsync(request.Name))
         {
@@ -131,9 +276,26 @@ public class PlanService : IPlanService
             throw new ConflictException($"A plan named '{request.Name}' already exists.");
         }
 
+        // ── Capture old->new field changes for the audit trail ──
+        // Plan updates are conditional: a null request field means "not provided",
+        // so we only record a field when it was actually sent AND differs.
+        var changes = new List<AuditChange>();
+        AddChange(changes, "Name", plan.Name, request.Name);
+        AddChange(changes, "Description", plan.Description, request.Description);
+        AddChange(changes, "Price", plan.PriceCents.ToString(), request.PriceCents?.ToString());
+        AddChange(changes, "Billing Cycle", plan.BillingCycle, request.BillingCycle);
+        AddChange(changes, "Upload (Kbps)", plan.BandwidthUpKbps?.ToString(), request.BandwidthUpKbps?.ToString());
+        AddChange(changes, "Download (Kbps)", plan.BandwidthDownKbps?.ToString(), request.BandwidthDownKbps?.ToString());
+        AddChange(changes, "Session Timeout (s)", plan.SessionTimeoutSeconds.ToString(), request.SessionTimeoutSeconds?.ToString());
+        AddChange(changes, "Idle Timeout (s)", plan.IdleTimeoutSeconds.ToString(), request.IdleTimeoutSeconds?.ToString());
+        AddChange(changes, "Max Devices", plan.MaxDevices.ToString(), request.MaxDevices?.ToString());
+        AddChange(changes, "Sort Order", plan.SortOrder.ToString(), request.SortOrder?.ToString());
+        AddChange(changes, "Active", plan.IsActive.ToString(), request.IsActive?.ToString());
+        // Drop entries where the new value was not provided (null request field).
+        changes = changes.Where(c => c.NewValue != null).ToList();
+
         if (request.Name != null) plan.Name = request.Name;
         if (request.Description != null) plan.Description = request.Description;
-        if (request.RadiusGroupId.HasValue) plan.RadiusGroupId = request.RadiusGroupId.Value;
         if (request.PriceCents.HasValue) plan.PriceCents = request.PriceCents.Value;
         if (request.BillingCycle != null) plan.BillingCycle = request.BillingCycle;
         if (request.BandwidthUpKbps.HasValue) plan.BandwidthUpKbps = request.BandwidthUpKbps;
@@ -142,20 +304,12 @@ public class PlanService : IPlanService
         if (request.IdleTimeoutSeconds.HasValue) plan.IdleTimeoutSeconds = request.IdleTimeoutSeconds.Value;
         if (request.MaxDevices.HasValue) plan.MaxDevices = request.MaxDevices.Value;
         if (request.SortOrder.HasValue) plan.SortOrder = request.SortOrder.Value;
+        if (request.IsActive.HasValue) plan.IsActive = request.IsActive.Value;
 
-        await _repo.UpdateAsync(plan);
+        await _repo.UpdatePlanWithPolicyAsync(plan);
 
-        // Re-sync QoS if relevant fields changed
-        if (request.RadiusGroupId.HasValue || request.BandwidthUpKbps.HasValue ||
-            request.BandwidthDownKbps.HasValue || request.SessionTimeoutSeconds.HasValue ||
-            request.IdleTimeoutSeconds.HasValue)
-        {
-            await SyncQos(plan);
-        }
+        await _audit.RecordAsync("plan", plan.Id, "update", $"Plan '{plan.Name}' updated", changes);
 
-        var groupName = await _repo.GetGroupNameAsync(plan.RadiusGroupId) ?? "";
-
-        _log.LogInformation("Plan {PlanId} updated successfully", id);
         return new PlanSummaryResponse
         {
             Id = plan.Id,
@@ -166,12 +320,14 @@ public class PlanService : IPlanService
             BandwidthUpKbps = plan.BandwidthUpKbps,
             BandwidthDownKbps = plan.BandwidthDownKbps,
             MaxDevices = plan.MaxDevices,
+            IsActive = plan.IsActive,
+            SortOrder = plan.SortOrder,
         };
     }
 
     public async Task DeleteAsync(int id)
     {
-        _log.LogInformation("Processing soft-delete for plan ID {PlanId}", id);
+        _log.LogDebug("Processing hard-delete and RADIUS policy removal for plan ID {PlanId}", id);
         var plan = await _repo.GetByIdAsync(id);
         if (plan == null)
         {
@@ -179,13 +335,18 @@ public class PlanService : IPlanService
             throw new NotFoundException($"Plan with ID {id} not found");
         }
 
-        plan.IsActive = false;
-        await _repo.UpdateAsync(plan);
-        _log.LogInformation("Plan {PlanId} deactivated", id);
+        await _repo.DeleteAsync(plan);
     }
 
     private async Task SyncQos(RadiusPackage plan)
     {
-        await _repo.SyncGroupQosAsync(plan);
+        await _repo.SyncGroupPolicyAsync(plan);
+    }
+
+    private static void AddChange(List<AuditChange> changes, string field, string? oldValue, string? newValue)
+    {
+        if (!string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            changes.Add(new AuditChange(field, oldValue, newValue));
     }
 }
+    

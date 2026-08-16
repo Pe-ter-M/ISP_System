@@ -1,14 +1,31 @@
 <script setup lang="ts">
-import { useOrganizationStore } from '@/stores/organization.store'
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useSettingsStore } from '@/stores/settings.store'
+import { useCompanyInfo } from '@/composables/useCompanyInfo'
+import MapView from '@/components/MapView.vue'
 
-const org = useOrganizationStore()
+const settings = useSettingsStore()
+// Contact info comes from settings (office/company address, email, phone)
+const { email, phone, address, officeLocation } = useCompanyInfo()
+
+// Unique colour for the office marker on the map
+const OFFICE_MARKER_COLOR = '#f97316'
+const officeMarkers = computed(() => {
+  if (!officeLocation.value) return []
+  return [{
+    lat: officeLocation.value.lat,
+    lng: officeLocation.value.lng,
+    label: 'Office',
+    sublabel: address.value,
+    color: OFFICE_MARKER_COLOR,
+  }]
+})
 
 const form = ref({
   name: '',
   email: '',
   subject: '',
-  message: ''
+  message: '',
 })
 
 const submitted = ref(false)
@@ -17,6 +34,51 @@ function handleSubmit() {
   // TODO: Later — integrate with email service / API endpoint
   submitted.value = true
 }
+
+onMounted(() => {
+  settings.load()
+})
+
+// ── Business hours / days come from settings ──
+interface BusinessHoursRow {
+  days: string
+  hours: string
+}
+
+const defaultHours: BusinessHoursRow[] = [
+  { days: 'Monday - Friday', hours: '8:00 AM - 6:00 PM' },
+  { days: 'Saturday', hours: '9:00 AM - 4:00 PM' },
+  { days: 'Sunday', hours: 'Closed' },
+]
+
+function parseBusinessHours(raw: string | null): BusinessHoursRow[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((r): r is BusinessHoursRow =>
+        typeof r === 'object' && r !== null &&
+        typeof (r as BusinessHoursRow).days === 'string' &&
+        typeof (r as BusinessHoursRow).hours === 'string',
+      )
+    }
+  } catch {
+    // not JSON — ignore, fall back to defaults
+  }
+  return []
+}
+
+const businessHours = computed<BusinessHoursRow[]>(() => {
+  const rows = parseBusinessHours(settings.value('business_hours'))
+  return rows.length > 0 ? rows : defaultHours
+})
+
+const businessDays = computed(() =>
+  (settings.value('business_days') ?? '')
+    .split(',')
+    .map(d => d.trim())
+    .filter(Boolean),
+)
 </script>
 
 <template>
@@ -98,7 +160,7 @@ function handleSubmit() {
         <!-- TODO: Later — integrate with email service -->
       </div>
 
-      <!-- Organization Contact Info -->
+      <!-- Contact Info — all dynamic from settings (settings → org profile → defaults) -->
       <div class="space-y-6">
         <div class="bg-white dark:bg-gray-900 rounded-xl p-6 sm:p-8 shadow-md border border-gray-100 dark:border-gray-800">
           <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Get in touch</h2>
@@ -113,8 +175,7 @@ function handleSubmit() {
               </div>
               <div>
                 <h3 class="font-semibold text-gray-800 dark:text-gray-100">Email</h3>
-                <p class="text-gray-500 dark:text-gray-400">{{ org.supportEmail || 'support@phantomnet.co.ke' }}</p>
-                <!-- TODO: Replace fallback email with actual org data when available -->
+                <a :href="`mailto:${email}`" class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{{ email }}</a>
               </div>
             </div>
 
@@ -127,7 +188,7 @@ function handleSubmit() {
               </div>
               <div>
                 <h3 class="font-semibold text-gray-800 dark:text-gray-100">Phone</h3>
-                <p class="text-gray-500 dark:text-gray-400">{{ org.supportPhone || '+254 700 000 000' }}</p>
+                <a :href="`tel:${phone.replace(/[^+\d]/g, '')}`" class="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{{ phone }}</a>
               </div>
             </div>
 
@@ -141,28 +202,37 @@ function handleSubmit() {
               </div>
               <div>
                 <h3 class="font-semibold text-gray-800 dark:text-gray-100">Address</h3>
-                <p class="text-gray-500 dark:text-gray-400">{{ org.address || 'Nairobi, Kenya' }}</p>
-                <!-- TODO: Add Google Maps / OpenStreetMap embed -->
+                <p class="text-gray-500 dark:text-gray-400">{{ address }}</p>
               </div>
+            </div>
+
+            <!-- Office Map — unique orange marker, set in Settings → office_address -->
+            <div v-if="officeLocation">
+              <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">Our office</p>
+              <MapView
+                :lat="officeLocation.lat"
+                :lng="officeLocation.lng"
+                :markers="officeMarkers"
+                fullscreenable
+                height="220px"
+                :zoom="14"
+              />
             </div>
           </div>
         </div>
 
-        <!-- Business Hours -->
+        <!-- Business Hours — from the business_hours setting -->
         <div class="bg-white dark:bg-gray-900 rounded-xl p-6 sm:p-8 shadow-md border border-gray-100 dark:border-gray-800">
-          <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Business Hours</h2>
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Business Hours</h2>
+            <span v-if="businessDays.length > 0" class="text-xs text-gray-400 dark:text-gray-500">
+              Open: {{ businessDays.join(' · ') }}
+            </span>
+          </div>
           <div class="space-y-2 text-gray-500 dark:text-gray-400">
-            <div class="flex justify-between">
-              <span class="font-medium text-gray-700 dark:text-gray-300">Monday - Friday</span>
-              <span>8:00 AM - 6:00 PM</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-medium text-gray-700 dark:text-gray-300">Saturday</span>
-              <span>9:00 AM - 4:00 PM</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-medium text-gray-700 dark:text-gray-300">Sunday</span>
-              <span>Closed</span>
+            <div v-for="(row, i) in businessHours" :key="i" class="flex justify-between">
+              <span class="font-medium text-gray-700 dark:text-gray-300">{{ row.days }}</span>
+              <span :class="row.hours.toLowerCase() === 'closed' ? 'text-red-500 dark:text-red-400 font-medium' : ''">{{ row.hours }}</span>
             </div>
           </div>
         </div>

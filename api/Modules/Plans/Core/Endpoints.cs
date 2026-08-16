@@ -1,9 +1,7 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 using InternetProvider.Api.Services;
 using InternetProvider.Api.Modules.Plans.Interfaces;
 using InternetProvider.Api.Modules.Plans.Dtos;
+using InternetProvider.Api.Modules.Audit.Interfaces;
 
 namespace InternetProvider.Api.Modules.Plans.Core;
 
@@ -14,83 +12,95 @@ public static class PlanEndpoints
         // ── Public endpoints (no auth) ──
         var publicGroup = app.MapGroup("/api/plans").WithTags("Plans Public");
 
-        publicGroup.MapGet("/", async (IPlanService service, ILogger<LoggerMarker> log) =>
+        publicGroup.MapGet("/", async (
+            bool? subscribersCount, 
+            IPlanService service, 
+            ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/plans called");
-            var plans = await service.GetAllAsync();
+            var includeCount = subscribersCount ?? false;
+            var plans = await service.GetAllAsync(includeCount);
             log.LogInformation("Returning {Count} plans", plans.Count);
             return ApiResponse.Success(plans, $"Found {plans.Count} plans").ToResult();
         });
 
-        publicGroup.MapGet("/{id:int}", async (int id, IPlanService service, ILogger<LoggerMarker> log) =>
+        publicGroup.MapGet("/{id:int}", async (
+            int id, 
+            bool? subscribersCount, 
+            IPlanService service, 
+            ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("GET /api/plans/{PlanId} called", id);
-
-            try
-            {
-                var plan = await service.GetDetailByIdAsync(id);
-                return ApiResponse.Success(plan, "Plan details retrieved").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                log.LogWarning("Plan {PlanId} not found", id);
-                return ApiResponse.Error("Plan not found", 404).ToResult();
-            }
+            var includeCount = subscribersCount ?? false;
+            var plan = await service.GetDetailByIdAsync(id, includeCount);
+            log.LogInformation("Returning plan detail for {PlanId}: {Name}", id, plan.Name);
+            return ApiResponse.Success(plan, "Plan details retrieved").ToResult();
         });
 
         // ── Admin endpoints (auth required) ──
         var adminGroup = app.MapGroup("/api/admin/plans").WithTags("Plans Admin");
 
-        adminGroup.MapPost("/", async (CreatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
+        adminGroup.MapGet("/", async (
+            int? page,
+            int? pageSize,
+            string? search,
+            string? status,
+            string? sortBy,
+            bool? sortDesc,
+            bool? subscribersCount,
+            IPlanService service,
+            ILogger<LoggerMarker> log) =>
+        {
+            page ??= 1;
+            pageSize ??= 10;
+            bool desc = sortDesc ?? false;
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 10;
+            if (pageSize > 100) pageSize = 100;
+
+            log.LogInformation("GET /api/admin/plans?page={Page}&size={PageSize}&search={Search}&status={Status}&sort={SortBy}&desc={SortDesc}",
+                page, pageSize, search, status, sortBy, desc);
+            var includeCount = subscribersCount ?? true;
+            var result = await service.GetAllAdminPagedAsync(page.Value, pageSize.Value, search, status, sortBy, desc, includeCount);
+            log.LogInformation("Returning {Count}/{Total} plans", result.Items.Count, result.TotalCount);
+            return ApiResponse.Success(result, $"Found {result.TotalCount} plans").ToResult();
+        })
+        .RequirePermission(Permissions.PlansView);
+
+        adminGroup.MapGet("/stats", async (IPlanService service, ILogger<LoggerMarker> log) =>
+        {
+            log.LogInformation("GET /api/admin/plans/stats called");
+            var stats = await service.GetPlanStatsAsync();
+            return ApiResponse.Success(stats, "Plan stats retrieved").ToResult();
+        })
+        .RequirePermission(Permissions.PlansView);
+
+        adminGroup.MapPost("/", async (CreatePlanRequest req, IPlanService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/admin/plans — creating {Name}", req.Name);
-
-            try
-            {
-                var plan = await service.CreateAsync(req);
-                return ApiResponse.Success(new { plan.Id, plan.Name }, "Plan created successfully").ToResult();
-            }
-            catch (ConflictException ex)
-            {
-                log.LogWarning("Conflict creating plan: {Message}", ex.Message);
-                return ApiResponse.Error(ex.Message, 409).ToResult();
-            }
+            var plan = await service.CreateAsync(req);
+            log.LogInformation("Plan created successfully: {PlanId} — {Name}", plan.Id, plan.Name);
+            await audit.RecordAsync("plan", plan.Id, "create", $"Plan '{plan.Name}' created");
+            return ApiResponse.Success(plan, "Plan created successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansCreate);
 
         adminGroup.MapPut("/{id:int}", async (int id, UpdatePlanRequest req, IPlanService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PUT /api/admin/plans/{PlanId} called", id);
-
-            try
-            {
-                var plan = await service.UpdateAsync(id, req);
-                return ApiResponse.Success(new { plan.Id, plan.Name }, "Plan updated successfully").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                return ApiResponse.Error("Plan not found", 404).ToResult();
-            }
-            catch (ConflictException ex)
-            {
-                return ApiResponse.Error(ex.Message, 409).ToResult();
-            }
+            var plan = await service.UpdateAsync(id, req);
+            log.LogInformation("Plan {PlanId} updated successfully", id);
+            return ApiResponse.Success(plan, "Plan updated successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansUpdate);
 
-        adminGroup.MapDelete("/{id:int}", async (int id, IPlanService service, ILogger<LoggerMarker> log) =>
+        adminGroup.MapDelete("/{id:int}", async (int id, IPlanService service, IAuditService audit, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("DELETE /api/admin/plans/{PlanId} called", id);
-
-            try
-            {
-                await service.DeleteAsync(id);
-                return ApiResponse.Success(null, "Plan deactivated successfully").ToResult();
-            }
-            catch (NotFoundException)
-            {
-                return ApiResponse.Error("Plan not found", 404).ToResult();
-            }
+            await service.DeleteAsync(id);
+            log.LogInformation("Plan {PlanId} and associated RADIUS policy deleted", id);
+            await audit.RecordAsync("plan", id, "delete", $"Plan #{id} deleted");
+            return ApiResponse.Success(null, "Plan and its RADIUS policies deleted successfully").ToResult();
         })
         .RequirePermission(Permissions.PlansDelete);
     }
