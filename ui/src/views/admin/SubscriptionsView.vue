@@ -1073,6 +1073,68 @@ function cancelDelete() {
                 </div>
               </div>
             </div>
+
+            <!-- ── Audit: who created / updated + change history ── -->
+            <div>
+              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Audit</h3>
+
+              <!-- Created by -->
+              <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-2">
+                <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Created by</p>
+                <template v-if="selectedSub.createdByInfo && selectedSub.createdByInfo.type === 'staff'">
+                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ selectedSub.createdByInfo.fullName || '—' }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <span v-if="selectedSub.createdByInfo.role">{{ selectedSub.createdByInfo.role }}</span>
+                    <span v-if="selectedSub.createdByInfo.role && (selectedSub.createdByInfo.email || selectedSub.createdByInfo.phone)"> · </span>
+                    <span v-if="selectedSub.createdByInfo.staffCode">{{ selectedSub.createdByInfo.staffCode }}</span>
+                  </p>
+                  <p v-if="selectedSub.createdByInfo.email || selectedSub.createdByInfo.phone" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                    {{ [selectedSub.createdByInfo.email, selectedSub.createdByInfo.phone].filter(Boolean).join(' · ') }}
+                  </p>
+                </template>
+                <template v-else>
+                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">Customer (self-service)</p>
+                  <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Created by the customer account</p>
+                </template>
+              </div>
+
+              <!-- Last updated by -->
+              <div v-if="selectedSub.updatedByInfo" class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-2">
+                <p class="text-xs text-gray-400 dark:text-gray-500 mb-1">Last updated by</p>
+                <template v-if="selectedSub.updatedByInfo.type === 'staff'">
+                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ selectedSub.updatedByInfo.fullName || '—' }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <span v-if="selectedSub.updatedByInfo.role">{{ selectedSub.updatedByInfo.role }}</span>
+                    <span v-if="selectedSub.updatedByInfo.email || selectedSub.updatedByInfo.phone"> · {{ [selectedSub.updatedByInfo.email, selectedSub.updatedByInfo.phone].filter(Boolean).join(' · ') }}</span>
+                  </p>
+                  <p v-if="selectedSub.updatedAt" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ formatDateTime(selectedSub.updatedAt) }}</p>
+                </template>
+                <template v-else>
+                  <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm">{{ selectedSub.updatedByInfo.fullName || 'Staff' }}</p>
+                  <p v-if="selectedSub.updatedAt" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ formatDateTime(selectedSub.updatedAt) }}</p>
+                </template>
+              </div>
+
+              <!-- Change history -->
+              <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">Change history</p>
+                <template v-if="selectedSub.auditHistory && selectedSub.auditHistory.length > 0">
+                  <ul class="space-y-3">
+                    <li v-for="item in selectedSub.auditHistory" :key="item.id" class="border-l-2 border-blue-200 dark:border-blue-900 pl-3">
+                      <p class="text-sm text-gray-800 dark:text-gray-100">{{ item.change }}</p>
+                      <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                        <span v-if="item.changedBy && item.changedBy.type === 'staff'">{{ item.changedBy.fullName || 'Staff' }}</span>
+                        <span v-else>Unknown</span>
+                        <span> · {{ formatDateTime(item.changedAt) }}</span>
+                      </p>
+                    </li>
+                  </ul>
+                </template>
+                <template v-else>
+                  <p class="text-sm text-gray-400 dark:text-gray-500">No changes recorded yet.</p>
+                </template>
+              </div>
+            </div>
           </div>
 
           <div v-else class="p-8 text-center">

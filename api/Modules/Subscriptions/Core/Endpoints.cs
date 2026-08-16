@@ -118,19 +118,21 @@ public static class SubscriptionEndpoints
         });
 
         // ── POST: Dynamic Purchase and Setup Subscription ──
-        group.MapPost("/", async (CreateSubscriptionRequest req, ISubscriptionService service, ILogger<LoggerMarker> log) =>
+        group.MapPost("/", async (CreateSubscriptionRequest req, HttpContext context, ISubscriptionService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("POST /api/subscriptions called - Customer ID: {Customer}", req.CustomerId);
-            var item = await service.CreateAsync(req);
+            var callerUserId = GetCallerUserId(context);
+            var item = await service.CreateAsync(req, callerUserId);
             return ApiResponse.Success(item, "Subscription successfully authenticated, paid, and connected").ToResult();
         })
         .RequirePermission(Permissions.SubscriptionsCreate);
 
         // ── PATCH: Modify Subscription Attributes (Partial updates) ──
-        group.MapPatch("/{id:int}", async (int id, UpdateSubscriptionRequest req, ISubscriptionService service, ILogger<LoggerMarker> log) =>
+        group.MapPatch("/{id:int}", async (int id, UpdateSubscriptionRequest req, HttpContext context, ISubscriptionService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PATCH /api/subscriptions/{Id} called", id);
-            var item = await service.UpdateAsync(id, req);
+            var callerUserId = GetCallerUserId(context);
+            var item = await service.UpdateAsync(id, req, callerUserId);
             return ApiResponse.Success(item, "Subscription updated successfully and synchronized to FreeRADIUS").ToResult();
         })
         .RequirePermission(Permissions.SubscriptionsUpdate);
@@ -138,10 +140,11 @@ public static class SubscriptionEndpoints
         // ── PATCH: Suspend / Resume a subscription (status-only change) ──
         // Governed by the dedicated subscription.suspend permission so a role can
         // suspend/resume without needing full subscription.update.
-        group.MapPatch("/{id:int}/status", async (int id, UpdateSubscriptionRequest req, ISubscriptionService service, ILogger<LoggerMarker> log) =>
+        group.MapPatch("/{id:int}/status", async (int id, UpdateSubscriptionRequest req, HttpContext context, ISubscriptionService service, ILogger<LoggerMarker> log) =>
         {
             log.LogInformation("PATCH /api/subscriptions/{Id}/status called", id);
-            var item = await service.UpdateAsync(id, req);
+            var callerUserId = GetCallerUserId(context);
+            var item = await service.UpdateAsync(id, req, callerUserId);
             return ApiResponse.Success(item, item.Status == "suspended"
                 ? "Subscription suspended and synchronized to FreeRADIUS"
                 : "Subscription resumed and synchronized to FreeRADIUS").ToResult();
@@ -156,5 +159,14 @@ public static class SubscriptionEndpoints
             return ApiResponse.Success(null, "Subscription policies and credentials successfully deleted from backend").ToResult();
         })
         .RequirePermission(Permissions.SubscriptionsDelete);
+    }
+
+    /// <summary>Extract the logged-in User.Id from the request's principal, or null if absent.</summary>
+    private static int? GetCallerUserId(HttpContext context)
+    {
+        var principal = context.Items["User"] as ClaimsPrincipal;
+        var claimUserId = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? principal?.FindFirst("sub")?.Value;
+        return int.TryParse(claimUserId, out var userId) ? userId : null;
     }
 }

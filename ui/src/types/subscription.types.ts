@@ -1,5 +1,22 @@
 export type SubscriptionStatus = 'active' | 'suspended' | 'expired'
 
+export interface SubscriptionActor {
+  type: 'staff' | 'customer' | 'unknown'
+  fullName: string | null
+  role: string | null
+  email: string | null
+  phone: string | null
+  staffCode: string | null
+}
+
+export interface SubscriptionHistoryItem {
+  id: number
+  changedBy: SubscriptionActor | null
+  change: string
+  notes: string | null
+  changedAt: string
+}
+
 export interface SubscriptionSummary {
   id: number
   customerId: number
@@ -17,6 +34,10 @@ export interface SubscriptionSummary {
   customerFullName: string
   customerCode: string
   planName: string
+  createdByInfo: SubscriptionActor | null
+  updatedByInfo: SubscriptionActor | null
+  updatedAt: string | null
+  auditHistory: SubscriptionHistoryItem[]
 }
 
 export interface PagedSubscriptions {

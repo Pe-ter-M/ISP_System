@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<Plans.Core.Models.RadiusGroup> RadiusGroups => Set<Plans.Core.Models.RadiusGroup>();
     public DbSet<Plans.Core.Models.RadiusPackage> RadiusPackages => Set<Plans.Core.Models.RadiusPackage>();
     public DbSet<Subscriptions.Core.Models.Subscription> Subscriptions => Set<Subscriptions.Core.Models.Subscription>();
+    public DbSet<Subscriptions.Core.Models.SubscriptionAudit> SubscriptionAudits => Set<Subscriptions.Core.Models.SubscriptionAudit>();
     public DbSet<Settings.Core.Models.Setting> Settings => Set<Settings.Core.Models.Setting>();
     public DbSet<Payments.Core.Models.Payment> Payments => Set<Payments.Core.Models.Payment>();
 

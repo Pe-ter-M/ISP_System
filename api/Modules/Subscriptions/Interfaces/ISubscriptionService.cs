@@ -9,8 +9,8 @@ public interface ISubscriptionService
     Task<SubscriptionStatsResponse> GetStatsAsync();
     Task<List<SubscriptionResponse>> GetByCustomerIdAsync(int customerId);
     Task<SubscriptionResponse> GetByIdAsync(int id);
-    Task<SubscriptionResponse> CreateAsync(CreateSubscriptionRequest request);
+    Task<SubscriptionResponse> CreateAsync(CreateSubscriptionRequest request, int? callerUserId = null);
     Task<SubscriptionResponse> CreateForCustomerUserAsync(int userId, CreateMySubscriptionRequest request);
-    Task<SubscriptionResponse> UpdateAsync(int id, UpdateSubscriptionRequest request);
+    Task<SubscriptionResponse> UpdateAsync(int id, UpdateSubscriptionRequest request, int? callerUserId = null);
     Task DeleteAsync(int id);
 }

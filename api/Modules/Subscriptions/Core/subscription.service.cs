@@ -91,7 +91,7 @@ public class SubscriptionService : ISubscriptionService
         return await BuildResponseAsync(s);
     }
 
-    public async Task<SubscriptionResponse> CreateAsync(CreateSubscriptionRequest request)
+    public async Task<SubscriptionResponse> CreateAsync(CreateSubscriptionRequest request, int? callerUserId = null)
     {
         if (request == null)
             throw new BadRequestException("Request body cannot be null. Please provide required subscription and billing attributes.");
@@ -163,7 +163,8 @@ public class SubscriptionService : ISubscriptionService
             CurrentPeriodEnd = now.AddDays(30), // standard 30 day package period duration
             AutoRenew = request.AutoRenew ?? false,
             CreatedAt = now,
-            UpdatedAt = now
+            UpdatedAt = now,
+            CreatedBy = callerUserId
         };
 
         var payment = new Payment
@@ -214,19 +215,28 @@ public class SubscriptionService : ISubscriptionService
             request.ReferenceNotes
         );
 
-        return await CreateAsync(standardRequest);
+        return await CreateAsync(standardRequest, userId);
     }
 
-    public async Task<SubscriptionResponse> UpdateAsync(int id, UpdateSubscriptionRequest request)
+    public async Task<SubscriptionResponse> UpdateAsync(int id, UpdateSubscriptionRequest request, int? callerUserId = null)
     {
         _log.LogInformation("Processing update subscription request for ID {Id}", id);
-        
+
         var subscription = await _repo.GetByIdAsync(id);
         if (subscription == null)
             throw new NotFoundException($"Subscription with ID {id} not found");
 
         var oldUsername = subscription.Username;
         var oldPassword = subscription.Password;
+
+        // Capture the original field values for change-history diffing
+        var oldStatus = subscription.Status;
+        var oldPeriodEnd = subscription.CurrentPeriodEnd;
+        var oldAutoRenew = subscription.AutoRenew;
+        var oldPackageId = subscription.PackageId;
+        var oldPackageName = await GetPackageNameAsync(oldPackageId);
+
+        var auditNotes = new List<string>();
 
         // Apply fields conditionally
         if (request.Status != null)
@@ -235,19 +245,28 @@ public class SubscriptionService : ISubscriptionService
             if (status is not ("active" or "suspended" or "expired"))
                 throw new ConflictException("Invalid subscription status choice. Choose 'active', 'suspended', or 'expired'.");
             subscription.Status = status;
+            if (!string.Equals(oldStatus, status, StringComparison.OrdinalIgnoreCase))
+                auditNotes.Add($"Status changed from '{oldStatus}' to '{status}'");
         }
 
         if (request.CurrentPeriodEnd.HasValue)
         {
             subscription.CurrentPeriodEnd = request.CurrentPeriodEnd.Value;
+            // Only record when the billing period end actually changed (avoid
+            // no-op entries when the edit form resubmits an unchanged value).
+            if (request.CurrentPeriodEnd.Value != oldPeriodEnd)
+                auditNotes.Add($"Billing period end changed from {oldPeriodEnd:yyyy-MM-dd} to {request.CurrentPeriodEnd.Value:yyyy-MM-dd}");
         }
 
         if (request.AutoRenew.HasValue)
         {
             subscription.AutoRenew = request.AutoRenew.Value;
+                // Only record when auto-renew actually toggled.
+            if (request.AutoRenew.Value != oldAutoRenew)
+                auditNotes.Add($"Auto-renew {(request.AutoRenew.Value ? "enabled" : "disabled")}");
         }
 
-        if (request.PackageId.HasValue)
+        if (request.PackageId.HasValue && request.PackageId.Value != oldPackageId)
         {
             var targetPackage = await _db.RadiusPackages.FindAsync(request.PackageId.Value);
             if (targetPackage == null)
@@ -256,14 +275,36 @@ public class SubscriptionService : ISubscriptionService
                 throw new ConflictException("Target package speed plan is currently set inactive");
 
             subscription.PackageId = targetPackage.Id;
+            auditNotes.Add($"Plan changed from '{oldPackageName}' to '{targetPackage.Name}'");
         }
 
         subscription.UpdatedAt = DateTime.UtcNow;
+        subscription.UpdatedBy = callerUserId;
 
         // Persist updates and synchronize FreeRADIUS accounts
         await _repo.UpdateWithSyncAsync(subscription, oldUsername, oldPassword);
 
+        // Record the change history (staff-only updates) for admin oversight
+        if (auditNotes.Count > 0)
+        {
+            _db.SubscriptionAudits.Add(new SubscriptionAudit
+            {
+                SubscriptionId = subscription.Id,
+                ChangedBy = callerUserId,
+                Change = string.Join("; ", auditNotes),
+                ChangedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+            _log.LogInformation("Subscription {SubId} updated by user {UserId}: {Changes}", subscription.Id, callerUserId, string.Join("; ", auditNotes));
+        }
+
         return await BuildResponseAsync(subscription);
+    }
+
+    private async Task<string> GetPackageNameAsync(int packageId)
+    {
+        var p = await _db.RadiusPackages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == packageId);
+        return p?.Name ?? $"Package #{packageId}";
     }
 
     /// <summary>Mark a subscription expired (and sync RADIUS reject rules) once its period end has passed.</summary>
@@ -293,7 +334,7 @@ public class SubscriptionService : ISubscriptionService
             .OrderByDescending(p => p.CreatedAt)
             .FirstOrDefaultAsync();
 
-        return new SubscriptionResponse(
+        var response = new SubscriptionResponse(
             s.Id,
             s.CustomerId,
             s.PackageId,
@@ -311,6 +352,64 @@ public class SubscriptionService : ISubscriptionService
             customer?.CustomerCode ?? "",
             plan?.Name ?? "Unknown plan"
         );
+
+        // ── Audit attribution: who created the subscription ──
+        response.CreatedByInfo = await ResolveActorAsync(s.CreatedBy);
+
+        // ── Audit attribution: who last updated the subscription ──
+        response.UpdatedByInfo = await ResolveActorAsync(s.UpdatedBy);
+        response.UpdatedAt = s.UpdatedAt;
+
+        // ── Change history: list of recorded updates (newest first) ──
+        var audits = await _db.SubscriptionAudits.AsNoTracking()
+            .Where(a => a.SubscriptionId == s.Id)
+            .OrderByDescending(a => a.ChangedAt)
+            .ToListAsync();
+
+        var history = new List<SubscriptionHistoryItem>(audits.Count);
+        foreach (var a in audits)
+        {
+            history.Add(new SubscriptionHistoryItem(
+                a.Id,
+                await ResolveActorAsync(a.ChangedBy),
+                a.Change,
+                a.Notes,
+                a.ChangedAt
+            ));
+        }
+        response.AuditHistory = history;
+
+        return response;
+    }
+
+    /// <summary>
+    /// Resolve an actor (from a User.Id) into display info. If the user maps to a
+    /// staff account we show their name/role/email/phone; otherwise it is recorded
+    /// simply as a customer self-service action.
+    /// </summary>
+    private async Task<ActorInfo?> ResolveActorAsync(int? userId)
+    {
+        if (userId == null)
+            return null;
+
+        var staff = await _db.Staff.AsNoTracking()
+            .Include(s => s.User).ThenInclude(u => u!.Role)
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+
+        if (staff?.User != null)
+        {
+            return new ActorInfo(
+                "staff",
+                staff.User.FullName,
+                staff.User.Role?.Name,
+                staff.User.Email,
+                staff.User.Phone,
+                staff.StaffCode
+            );
+        }
+
+        // No staff record for this user — treat as a customer self-service action.
+        return new ActorInfo("customer", null, null, null, null, null);
     }
 
     public async Task DeleteAsync(int id)
