@@ -18,7 +18,7 @@ import PlanDetailModal from '@/components/PlanDetailModal.vue'
 import type { SubscriptionSummary, SubscriptionStatus, Payment, PaymentMethodOption } from '@/types/subscription.types'
 import type { CustomerSummary } from '@/types/customer.types'
 import type { PlanSummary } from '@/types/plan.types'
-import type { CreateSubscriptionPayload } from '@/types/subscription.types'
+import type { CreateSubscriptionPayload, UpdateSubscriptionPayload } from '@/types/subscription.types'
 
 const toast = useToastStore()
 const auth = useAuthStore()
@@ -87,6 +87,20 @@ const createForm = ref({
   autoRenew: true,
   referenceNotes: '',
 })
+
+// ── Edit Subscription modal (subscription.update) ──
+const showEditModal = ref(false)
+const editSaving = ref(false)
+const editError = ref('')
+const editValidation = ref<Record<string, string>>({})
+const editingSub = ref<SubscriptionSummary | null>(null)
+const editForm = ref({
+  packageId: 0,
+  autoRenew: false,
+  currentPeriodEnd: '',
+})
+const editPlans = ref<PlanSummary[]>([])
+const editPlansLoading = ref(false)
 
 // ── Computed ──
 const pageNumbers = computed(() => {
@@ -404,6 +418,66 @@ async function toggleStatus(s: SubscriptionSummary) {
   }
 }
 
+// ── Edit subscription (plan / period end / auto-renew) ──
+async function openEdit(s: SubscriptionSummary) {
+  editingSub.value = s
+  editError.value = ''
+  editValidation.value = {}
+  editForm.value = {
+    packageId: s.packageId,
+    autoRenew: s.autoRenew,
+    currentPeriodEnd: s.currentPeriodEnd ? s.currentPeriodEnd.slice(0, 10) : '',
+  }
+  showEditModal.value = true
+  editPlansLoading.value = true
+  try {
+    editPlans.value = await getPlans()
+  } catch {
+    editPlans.value = []
+  } finally {
+    editPlansLoading.value = false
+  }
+}
+
+function closeEdit() {
+  if (editSaving.value) return
+  showEditModal.value = false
+  editingSub.value = null
+}
+
+function validateEditSubscription(): boolean {
+  const v: Record<string, string> = {}
+  if (!editForm.value.packageId) v.packageId = 'Select a plan'
+  if (!editForm.value.currentPeriodEnd) v.currentPeriodEnd = 'Period end is required'
+  editValidation.value = v
+  return Object.keys(v).length === 0
+}
+
+async function submitEdit() {
+  if (!editingSub.value) return
+  if (!validateEditSubscription()) return
+  editSaving.value = true
+  editError.value = ''
+  try {
+    const payload: UpdateSubscriptionPayload = {
+      autoRenew: editForm.value.autoRenew,
+      currentPeriodEnd: editForm.value.currentPeriodEnd ? new Date(editForm.value.currentPeriodEnd + 'T23:59:59').toISOString() : undefined,
+      packageId: editForm.value.packageId,
+    }
+    const updated = await updateSubscription(editingSub.value.id, payload)
+    const idx = subs.value.findIndex(x => x.id === updated.id)
+    if (idx !== -1) subs.value[idx] = updated
+    closeEdit()
+    toast.success(`Subscription for ${updated.customerFullName} updated`)
+    fetchStats()
+  } catch (e: unknown) {
+    editError.value = errMsg(e, 'Failed to update subscription')
+    toast.error(editError.value)
+  } finally {
+    editSaving.value = false
+  }
+}
+
 // ── Delete ──
 function openDelete(s: SubscriptionSummary) {
   deleteTarget.value = s
@@ -597,6 +671,12 @@ function cancelDelete() {
                     class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition cursor-pointer">
                     View
                   </button>
+                  <Can permission="subscription.update">
+                    <button @click="openEdit(s)"
+                      class="px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition cursor-pointer">
+                      Edit
+                    </button>
+                  </Can>
                   <Can permission="subscription.suspend">
                     <button v-if="s.status !== 'expired'" @click="toggleStatus(s)"
                       class="px-3 py-1.5 text-xs font-medium rounded-lg transition cursor-pointer"
@@ -821,6 +901,69 @@ function cancelDelete() {
               Create Subscription
             </button>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── Edit Subscription Modal (subscription.update) ── -->
+    <Teleport to="body">
+      <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeEdit">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeEdit"></div>
+        <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-modal-in p-6">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">Edit Subscription</h2>
+              <p v-if="editingSub" class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{{ editingSub.customerFullName }} · {{ editingSub.planName }}</p>
+            </div>
+            <button @click="closeEdit" :disabled="editSaving"
+              class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-sm disabled:opacity-40">✕</button>
+          </div>
+
+          <form @submit.prevent="submitEdit" class="space-y-4">
+            <div>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Plan *</label>
+              <select v-model.number="editForm.packageId"
+                class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                :class="editValidation.packageId ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'">
+                <option :value="0" disabled>Select a plan…</option>
+                <option v-for="p in editPlans" :key="p.id" :value="p.id">{{ p.name }} — {{ formatPrice(p.priceCents) }}</option>
+              </select>
+              <p v-if="editValidation.packageId" class="text-xs text-red-500 mt-1">{{ editValidation.packageId }}</p>
+            </div>
+
+            <div>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Period End *</label>
+              <input v-model="editForm.currentPeriodEnd" type="date"
+                class="w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"
+                :class="editValidation.currentPeriodEnd ? 'border-red-400' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'" />
+              <p v-if="editValidation.currentPeriodEnd" class="text-xs text-red-500 mt-1">{{ editValidation.currentPeriodEnd }}</p>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-Renew</p>
+                <p class="text-xs text-gray-400 dark:text-gray-500">Automatically renew at period end</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input v-model="editForm.autoRenew" type="checkbox" class="sr-only peer" />
+                <div class="w-9 h-5 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+              </label>
+            </div>
+
+            <p v-if="editError" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{{ editError }}</p>
+
+            <div class="flex gap-3 pt-2">
+              <button type="button" @click="closeEdit" :disabled="editSaving"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition cursor-pointer disabled:opacity-40">
+                Cancel
+              </button>
+              <button type="submit" :disabled="editSaving"
+                class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+                <span v-if="editSaving" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                Save Changes
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </Teleport>
