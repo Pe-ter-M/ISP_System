@@ -40,26 +40,28 @@ public static class DatabaseSeeder
         // Admin: everything
         await SyncRolePermissionsAsync(db, adminRole.Id, Permissions.All.Keys, allPerms);
 
-        // Secretary: customers, subscriptions, plans, sessions, users(view), settings, financial, devices
+        // Secretary: current DB permissions as the default seed set
         await SyncRolePermissionsAsync(db, secretaryRole.Id, new[]
         {
             Permissions.CustomersView, Permissions.CustomersCreate, Permissions.CustomersUpdate,
-            Permissions.SubscriptionsView,
+            Permissions.SubscriptionsView, Permissions.SubscriptionsCreate,
+            Permissions.SubscriptionsUpdate, Permissions.SubscriptionsSuspend,
             Permissions.PlansView,
             Permissions.SessionsView,
             Permissions.UsersView,
-            Permissions.SettingsView, Permissions.SettingsUpdate,
+            Permissions.SettingsView,
             Permissions.FinancialView, Permissions.FinancialCreate,
             Permissions.ReportsView,
             Permissions.DevicesView,
             Permissions.AuditView,
+            Permissions.StaffView, Permissions.StaffCreate, Permissions.StaffUpdate,
+            Permissions.InfrastructureView,
         }, allPerms);
 
-        // Head Technician: customers(view/update), subscriptions(view/create/update/suspend),
-        // plans(view), radius(view/nas), sessions, devices(all), installations, infrastructure(all), technicians
+        // Head Technician: current DB permissions as the default seed set
         await SyncRolePermissionsAsync(db, headTechRole.Id, new[]
         {
-            Permissions.CustomersView, Permissions.CustomersUpdate,
+            Permissions.CustomersView, Permissions.CustomersCreate, Permissions.CustomersUpdate,
             Permissions.SubscriptionsView, Permissions.SubscriptionsCreate,
             Permissions.SubscriptionsUpdate, Permissions.SubscriptionsSuspend,
             Permissions.PlansView,
@@ -69,14 +71,14 @@ public static class DatabaseSeeder
             Permissions.InstallationsManage,
             Permissions.InfrastructureView, Permissions.InfrastructureManage,
             Permissions.TechniciansSchedule, Permissions.TechniciansAssign,
+            Permissions.StaffView,
         }, allPerms);
 
-        // Field Technician: customers(view), subscriptions(view), sessions, devices(view/assign),
-        // installations, infrastructure(view)
+        // Field Technician: current DB permissions as the default seed set
         await SyncRolePermissionsAsync(db, fieldTechRole.Id, new[]
         {
             Permissions.CustomersView,
-            Permissions.SubscriptionsView,
+            Permissions.SubscriptionsView, Permissions.SubscriptionsCreate,
             Permissions.SessionsView,
             Permissions.DevicesView, Permissions.DevicesAssign,
             Permissions.InstallationsManage,
